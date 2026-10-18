@@ -1,0 +1,19 @@
+# Build artifacts
+build/
+dist/
+*.o
+*.a
+*.so
+compile_commands.json
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Local sandbox
+/dev/shm/
+
+# Created by the upstream Python library when running the parity test
+log.log

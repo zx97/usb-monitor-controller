@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Example udev rules for the USB LCD screens supported by
+# USB-monitor-controller. Install as /etc/udev/rules.d/99-lcd.rules then:
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Goal: give the local user access to the serial ports, and stop ModemManager
+# from probing them.
+
+# --- USB CDC serial screens: readable/writable by everyone (adjust to a group if you prefer) ---
+
+# Turing / UsbPCMonitor (rev. A) and XuanFang (rev. B) share this VID:PID
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5722", MODE="0666", ENV{ID_MM_DEVICE_IGNORE}="1"
+# Turing rev. C (sleeping) and 8.8"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="ca21", MODE="0666", ENV{ID_MM_DEVICE_IGNORE}="1"
+# Turing rev. C (awake, Linux USB gadget)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a7", MODE="0666", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0121", MODE="0666", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0106", MODE="0666", ENV{ID_MM_DEVICE_IGNORE}="1"
+# Kipye Qiye Smart Display (rev. D)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="454d", ATTRS{idProduct}=="4e41", MODE="0666", ENV{ID_MM_DEVICE_IGNORE}="1"
+# WeAct Studio Display FS V1 (3.5" and 0.96")
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="fe0c", MODE="0666", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# --- Native USB (TUR_USB) screens, accessed through libusb ---
+
+SUBSYSTEM=="usb", ATTR{idVendor}=="1cbe", MODE="0666"
