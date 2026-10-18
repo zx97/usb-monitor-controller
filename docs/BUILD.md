@@ -23,6 +23,23 @@ reported as unavailable.
 
 ## 2. Configure and build
 
+### Quick start (Makefile)
+
+The `Makefile` wires up the Homebrew `pkg-config` path, so a plain `make` is
+enough:
+
+```sh
+make          # configure (Ninja) + build -> build/lcd-cli
+make test     # offline simulation self test
+make list     # list connected screens
+make probe    # open a screen and print what was detected
+make sim      # render a sample frame offline -> screencap.png
+make static   # distributable static build (see STATIC_BUILD.md)
+make clean
+```
+
+### Manual CMake
+
 The dependencies live in the Homebrew prefix, so put its `pkg-config` files on
 the search path first (the helper does that for you):
 

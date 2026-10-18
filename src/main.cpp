@@ -17,13 +17,16 @@
 
 #include "lcdctl/drivers.hpp"
 #include "lcdctl/factory.hpp"
+#include "lcdctl/image.hpp"
 #include "lcdctl/logging.hpp"
+#include "lcdctl/simulate.hpp"
 #include "lcdctl/transport.hpp"
 #include "lcdctl/types.hpp"
 
 namespace {
 
 using lcdctl::Color;
+using lcdctl::Image;
 using lcdctl::LcdComm;
 using lcdctl::Revision;
 
@@ -49,10 +52,18 @@ const char* kUsage =
     "  --baud <rate>                 serial baud rate (default: 115200)\n"
     "  --reset                       send a hardware reset before initializing\n"
     "  --x <px> --y <px>             text/image position\n"
+    "  --orientation <value>         portrait|landscape|reverse-portrait|reverse-landscape\n"
     "  --size <pt>                   font size (text)\n"
     "  --color <c> --background <c>  color name, #rrggbb or \"r,g,b\"\n"
     "  --font <path.ttf>             font file (default: bundled Roboto Mono)\n"
-    "  --verbose, -v                 debug logging\n";
+    "  --verbose, -v                 debug logging\n"
+    "\n"
+    "Simulation (no hardware):\n"
+    "  --simulate                    run the driver offline and render the result\n"
+    "  --output <file.png>           PNG to write in simulation mode (default: screencap.png)\n"
+    "\n"
+    "In simulation mode an explicit --revision is required, e.g.:\n"
+    "  lcd-cli image logo.png --simulate --revision C --width 480 --height 800 -o out.png\n";
 
 struct Options {
     std::map<std::string, std::string> values;
@@ -75,11 +86,20 @@ struct Options {
 };
 
 Options parseArgs(int argc, char** argv) {
-    static const std::vector<std::string> booleanFlags = {"--reset", "--verbose", "-v", "-h", "--help"};
+    static const std::vector<std::string> booleanFlags = {"--reset", "--simulate",
+                                                          "--verbose", "-v", "-h", "--help"};
     Options options;
     for (int i = 1; i < argc; ++i) {
         std::string token = argv[i];
-        if (token.rfind("--", 0) == 0 || token == "-v" || token == "-h") {
+        // Short aliases.
+        if (token == "-o") {
+            token = "--output";
+        } else if (token == "-v") {
+            token = "--verbose";
+        } else if (token == "-h") {
+            token = "--help";
+        }
+        if (token.rfind("--", 0) == 0) {
             const std::size_t equal = token.find('=');
             if (equal != std::string::npos) {
                 options.values[token.substr(0, equal)] = token.substr(equal + 1);
@@ -128,6 +148,26 @@ std::unique_ptr<LcdComm> openLcd(const Options& options) {
     return lcd;
 }
 
+// Instantiate a driver backed by a simulated transport (no hardware).
+lcdctl::SimulatedLcd openSimulated(const Options& options) {
+    Revision revision = Revision::A;
+    const std::string requested = options.get("--revision", "");
+    if (requested.empty() || requested == "AUTO") {
+        throw std::runtime_error(
+            "--simulate requires an explicit --revision (A/B/C/D/WEACT_A/WEACT_B)");
+    }
+    if (!lcdctl::parseRevision(requested, revision)) {
+        throw std::runtime_error("unknown revision: " + requested);
+    }
+    if (!lcdctl::simulationSupported(revision)) {
+        throw std::runtime_error("revision " + requested + " cannot be simulated");
+    }
+    auto simulated = lcdctl::createSimulatedLcd(revision, options.getInt("--width", 0),
+                                                options.getInt("--height", 0));
+    simulated.lcd->initializeComm();
+    return simulated;
+}
+
 void printDevices() {
     std::cout << "Serial (USB CDC) ports:" << std::endl;
     bool anySerial = false;
@@ -156,7 +196,23 @@ void printDevices() {
 }
 
 void printProbe(LcdComm& lcd) {
-    std::cout << "Opened " << lcdctl::revisionName(lcdctl::Revision::A) << std::endl;
+    const char* className = "LcdComm";
+    if (dynamic_cast<lcdctl::LcdCommRevA*>(&lcd)) {
+        className = "LcdCommRevA";
+    } else if (dynamic_cast<lcdctl::LcdCommRevB*>(&lcd)) {
+        className = "LcdCommRevB";
+    } else if (dynamic_cast<lcdctl::LcdCommRevC*>(&lcd)) {
+        className = "LcdCommRevC";
+    } else if (dynamic_cast<lcdctl::LcdCommRevD*>(&lcd)) {
+        className = "LcdCommRevD";
+    } else if (dynamic_cast<lcdctl::LcdCommWeActA*>(&lcd)) {
+        className = "LcdCommWeActA";
+    } else if (dynamic_cast<lcdctl::LcdCommWeActB*>(&lcd)) {
+        className = "LcdCommWeActB";
+    } else if (dynamic_cast<lcdctl::LcdCommTuringUSB*>(&lcd)) {
+        className = "LcdCommTuringUSB";
+    }
+    std::cout << "Opened " << className << std::endl;
     std::cout << "  width  = " << lcd.getWidth() << std::endl;
     std::cout << "  height = " << lcd.getHeight() << std::endl;
     if (auto* revA = dynamic_cast<lcdctl::LcdCommRevA*>(&lcd)) {
@@ -175,38 +231,32 @@ void printProbe(LcdComm& lcd) {
     }
 }
 
-int run(const Options& options) {
-    if (options.flag("--help") || options.positional.empty()) {
-        std::cout << kUsage;
-        return options.positional.empty() ? 1 : 0;
+// Apply the optional --orientation before running a command.
+void applyOrientation(LcdComm& lcd, const Options& options) {
+    const std::string value = options.get("--orientation", "");
+    if (value.empty()) {
+        return;
     }
-
-    const std::string command = options.positional[0];
-
-    if (command == "list") {
-        printDevices();
-        return 0;
+    lcdctl::Orientation orientation = lcdctl::Orientation::Portrait;
+    if (!lcdctl::parseOrientation(value, orientation)) {
+        throw std::runtime_error("invalid --orientation: " + value);
     }
+    lcd.setOrientation(orientation);
+}
 
-    if (command == "probe") {
-        auto lcd = openLcd(options);
-        printProbe(*lcd);
-        return 0;
-    }
-
-    auto lcd = openLcd(options);
-
+// Execute a command against an already-initialized display.
+void performAction(LcdComm& lcd, const std::string& command, const Options& options) {
     if (command == "clear") {
-        lcd->clear();
+        lcd.clear();
     } else if (command == "on") {
-        lcd->screenOn();
+        lcd.screenOn();
     } else if (command == "off") {
-        lcd->screenOff();
+        lcd.screenOff();
     } else if (command == "brightness") {
         if (options.positional.size() < 2) {
             throw std::runtime_error("brightness requires a value");
         }
-        lcd->setBrightness(std::stoi(options.positional[1]));
+        lcd.setBrightness(std::stoi(options.positional[1]));
     } else if (command == "led") {
         if (options.positional.size() < 4) {
             throw std::runtime_error("led requires r g b");
@@ -214,7 +264,7 @@ int run(const Options& options) {
         const Color color{static_cast<std::uint8_t>(std::stoi(options.positional[1])),
                           static_cast<std::uint8_t>(std::stoi(options.positional[2])),
                           static_cast<std::uint8_t>(std::stoi(options.positional[3]))};
-        lcd->setBackplateLedColor(color);
+        lcd.setBackplateLedColor(color);
     } else if (command == "orientation") {
         if (options.positional.size() < 2) {
             throw std::runtime_error("orientation requires a value");
@@ -223,12 +273,12 @@ int run(const Options& options) {
         if (!lcdctl::parseOrientation(options.positional[1], orientation)) {
             throw std::runtime_error("invalid orientation: " + options.positional[1]);
         }
-        lcd->setOrientation(orientation);
+        lcd.setOrientation(orientation);
     } else if (command == "image") {
         if (options.positional.size() < 2) {
             throw std::runtime_error("image requires a path");
         }
-        lcd->displayBitmap(options.positional[1], options.getInt("--x", 0), options.getInt("--y", 0));
+        lcd.displayBitmap(options.positional[1], options.getInt("--x", 0), options.getInt("--y", 0));
     } else if (command == "text") {
         std::string text;
         for (std::size_t i = 1; i < options.positional.size(); ++i) {
@@ -241,12 +291,63 @@ int run(const Options& options) {
         style.fontColor = lcdctl::parseColor(options.get("--color", "black"));
         style.backgroundColor = lcdctl::parseColor(options.get("--background", "white"));
         style.align = options.get("--align", "left");
-        lcd->displayText(text, options.getInt("--x", 0), options.getInt("--y", 0), style);
+        lcd.displayText(text, options.getInt("--x", 0), options.getInt("--y", 0), style);
     } else {
-        std::cerr << "Unknown command: " << command << "\n\n" << kUsage;
+        throw std::runtime_error("unknown command: " + command);
+    }
+}
+
+int run(const Options& options) {
+    if (options.flag("--help")) {
+        std::cout << kUsage;
+        return 0;
+    }
+    if (options.positional.empty()) {
+        std::cerr << kUsage;
         return 1;
     }
 
+    const std::string command = options.positional[0];
+
+    if (command == "list") {
+        printDevices();
+        return 0;
+    }
+
+    if (command == "probe") {
+        if (options.flag("--simulate")) {
+            auto simulated = openSimulated(options);
+            printProbe(*simulated.lcd);
+            return 0;
+        }
+        auto lcd = openLcd(options);
+        printProbe(*lcd);
+        return 0;
+    }
+
+    if (options.flag("--simulate")) {
+        // Offline: drive the real encoder, then decode the captured bytes back
+        // into a framebuffer and write it to a PNG.
+        auto simulated = openSimulated(options);
+        applyOrientation(*simulated.lcd, options);
+        performAction(*simulated.lcd, command, options);
+
+        const int width = simulated.lcd->getWidth();
+        const int height = simulated.lcd->getHeight();
+        const Image framebuffer = lcdctl::decodeCapturedStream(
+            simulated.revision, simulated.transport->captured(), width, height);
+        const std::string output = options.get("--output", "screencap.png");
+        lcdctl::savePng(output, framebuffer);
+
+        std::cout << "OK: " << command << " (simulated " << lcdctl::revisionName(simulated.revision)
+                  << " " << width << "x" << height << ", " << simulated.transport->captured().size()
+                  << " bytes captured) -> " << output << std::endl;
+        return 0;
+    }
+
+    auto lcd = openLcd(options);
+    applyOrientation(*lcd, options);
+    performAction(*lcd, command, options);
     std::cout << "OK: " << command << std::endl;
     return 0;
 }

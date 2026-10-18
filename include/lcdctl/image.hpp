@@ -21,9 +21,7 @@ public:
 
     // Load a PNG/JPEG file (format decided from the file magic bytes).
     // Throws std::runtime_error on failure.
-    static Image load(const std::string& path);
-
-    int width() const { return width_; }
+    static Image load(const std::string& path);    int width() const { return width_; }
     int height() const { return height_; }
     int channels() const { return channels_; }
     bool empty() const { return data_.empty(); }
@@ -53,5 +51,9 @@ private:
     int channels_ = 3;
     std::vector<std::uint8_t> data_;
 };
+
+// Encode `image` and write it to a PNG file. Throws std::runtime_error on
+// failure. Used by the simulation mode to dump the decoded framebuffer.
+void savePng(const std::string& path, const Image& image);
 
 }  // namespace lcdctl

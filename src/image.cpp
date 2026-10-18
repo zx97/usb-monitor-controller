@@ -100,6 +100,37 @@ Image loadJpeg(const std::string& path) {
 
 }  // namespace
 
+void savePng(const std::string& path, const Image& image) {
+    const Image rgba = image.convert(4);
+    std::FILE* file = std::fopen(path.c_str(), "wb");
+    if (!file) {
+        throw std::runtime_error("cannot open PNG file for writing: " + path);
+    }
+    png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+    png_infop info = png_create_info_struct(png);
+    if (!png || !info) {
+        std::fclose(file);
+        throw std::runtime_error("cannot create PNG write struct");
+    }
+    if (setjmp(png_jmpbuf(png))) {
+        png_destroy_write_struct(&png, &info);
+        std::fclose(file);
+        throw std::runtime_error("PNG encode error");
+    }
+    png_init_io(png, file);
+    png_set_IHDR(png, info, rgba.width(), rgba.height(), 8, PNG_COLOR_TYPE_RGB_ALPHA,
+                 PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    png_write_info(png, info);
+    std::vector<png_bytep> rows(rgba.height());
+    for (int y = 0; y < rgba.height(); ++y) {
+        rows[y] = const_cast<png_bytep>(rgba.data() + static_cast<std::size_t>(y) * rgba.width() * 4);
+    }
+    png_write_image(png, rows.data());
+    png_write_end(png, nullptr);
+    png_destroy_write_struct(&png, &info);
+    std::fclose(file);
+}
+
 Image::Image(int width, int height, int channels, std::uint8_t fill)
     : width_(width), height_(height), channels_(channels) {
     if (width <= 0 || height <= 0 || (channels != 3 && channels != 4)) {

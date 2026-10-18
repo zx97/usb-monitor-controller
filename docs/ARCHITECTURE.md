@@ -52,6 +52,10 @@ Two ideas drive the design:
 | `include/lcdctl/drivers.hpp` | One class per revision. |
 | `include/lcdctl/factory.hpp` | `Revision`, detection, `createLcd()`. |
 | `include/lcdctl/paths.hpp` | Locates the bundled `res/` directory and default font. |
+| `include/lcdctl/simulate.hpp` | Offline simulation: recording transport + per-revision decoders. |
+| `src/simulate.cpp` | Simulation transport, decoders for A/B/D/WeAct, simulated driver factory. |
+| `src/simulate_rev_c.cpp` | Revision C decoder (0xef69 framing, full + partial updates). |
+| `tests/simulate_roundtrip.cpp` | Round-trip self test (`lcd-selftest`). |
 | `src/drivers/rev_a.cpp … turing_usb.cpp` | The per-revision protocol implementations. |
 | `src/main.cpp` | The `lcd-cli` tool. |
 
@@ -205,7 +209,40 @@ if needed) and returns the matching driver as a `std::unique_ptr<LcdComm>`.
 
 ---
 
-## 7. Relationship to the Python project
+## 7. Offline simulation
+
+Because the drivers are pure byte encoders, they can be tested with no hardware
+by inverting them:
+
+```mermaid
+flowchart LR
+    IMG[Image] --> DRV[driver<br/>displayPILImage]
+    DRV -->|writes| ST[SimulatedTransport<br/>records bytes + replays canned HELLO/version replies]
+    ST -->|captured stream| DEC[decodeCapturedStream<br/>per-revision decoder]
+    DEC --> FB[framebuffer Image]
+    FB --> PNG[screencap.png]
+```
+
+* `SimulatedTransport` records every write and replays the HELLO / version
+  answers a real screen would return, so `initializeComm()` succeeds.
+* `decodeCapturedStream()` parses the recorded stream back into pixels. Each
+  decoder mirrors the framing of its encoder:
+  * **A** — 6/16-byte packets; `DISPLAY_BITMAP` (197) sets a rectangle, then
+    RGB565 LE data follows.
+  * **B** — 10-byte frames; `0xCC` sets a rectangle, then RGB565 BE data.
+  * **C** — messages padded to 250 bytes; full-image and partial-update paths,
+    BGRA/BGR data, per-row index headers.
+  * **D** — variable-length commands, `BLOCKWRITE` rectangle, then RGB565 BE
+    data in 63-byte groups each prefixed with `0x50`.
+  * **WeAct** — `CMD … CMD_END` frames; `SET_BITMAP` (0x05) sets a rectangle,
+    then RGB565 LE data.
+* `lcd-selftest` drives every revision with a pattern, decodes the result and
+  asserts byte equality (using an orientation that avoids software rotation).
+
+`TUR_USB` is intentionally not simulatable: it sends encrypted PNG/JPEG
+payloads, so there is no simple framebuffer to decode.
+
+## 8. Relationship to the Python project
 
 | Python | C++ |
 |--------|-----|
@@ -214,6 +251,7 @@ if needed) and returns the matching driver as a `std::unique_ptr<LcdComm>`.
 | `library/lcd/lcd_comm_turing_usb.py` | `src/drivers/turing_usb.cpp` |
 | `library/lcd/serialize.py` | `serialize.hpp` / `serialize.cpp` |
 | `library/lcd/color.py` | `types.cpp` (`parseColor`) |
+| `library/lcd/lcd_simulated.py` | `simulate.hpp` / `simulate.cpp` (decode-to-PNG instead of a fake driver) |
 | `library/display.py` (factory) | `factory.cpp` |
 | Pillow `Image` / `ImageFont` | `image.cpp` (libpng/libjpeg) / `font.cpp` (FreeType) |
 | `pyserial` | `SerialTransport` (termios) |

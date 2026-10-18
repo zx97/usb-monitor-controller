@@ -11,6 +11,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 option(LCDCTL_BUILD_CLI "Build the lcd-cli command line tool" ON)
+option(LCDCTL_BUILD_TESTS "Build the self-test executable" ON)
 option(LCDCTL_ENABLE_LIBUSB "Build native-USB (TUR_USB) support when libusb is found" ON)
 
 find_package(PkgConfig REQUIRED)
@@ -31,6 +32,8 @@ add_library(lcdctl STATIC
     src/font.cpp
     src/transport.cpp
     src/lcd_comm.cpp
+    src/simulate.cpp
+    src/simulate_rev_c.cpp
     src/drivers/rev_a.cpp
     src/drivers/rev_b.cpp
     src/drivers/rev_c.cpp
@@ -81,4 +84,11 @@ if(LCDCTL_BUILD_CLI)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/RobotoMono-Regular.ttf"
                 "$<TARGET_FILE_DIR:lcd-cli>/res/fonts/RobotoMono-Regular.ttf")
+endif()
+
+if(LCDCTL_BUILD_TESTS)
+    add_executable(lcd-selftest tests/simulate_roundtrip.cpp)
+    target_link_libraries(lcd-selftest PRIVATE lcdctl)
+    enable_testing()
+    add_test(NAME simulate_roundtrip COMMAND lcd-selftest)
 endif()

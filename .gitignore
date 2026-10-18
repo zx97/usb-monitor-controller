@@ -1,6 +1,8 @@
 # Build artifacts
 build/
 dist/
+build-static/
+dist-static/
 *.o
 *.a
 *.so

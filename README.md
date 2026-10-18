@@ -56,14 +56,34 @@ only native-USB (`TUR_USB`) support is disabled.
 
 ## Build
 
+The easiest way — the Makefile sets up the Homebrew `pkg-config` path for you:
+
+```sh
+make
+```
+
+That configures CMake (Ninja) and builds `build/lcd-cli`. Other targets:
+
+```sh
+make test     # offline simulation round-trip self test (no hardware)
+make list     # list connected screens
+make probe    # open a screen and print what was detected
+make sim      # render a sample frame offline to screencap.png
+make static   # build a distributable binary with static dependencies
+make help
+```
+
+Equivalently, by hand:
+
 ```sh
 source tools/dev-env.sh          # puts the Homebrew pkg-config files on the path
 cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
-The binary is `build/lcd-cli`. See [`docs/BUILD.md`](docs/BUILD.md) for details
-(options, packaging, troubleshooting).
+See [`docs/BUILD.md`](docs/BUILD.md) for details (options, packaging,
+troubleshooting) and [`docs/STATIC_BUILD.md`](docs/STATIC_BUILD.md) for the
+distributable static build.
 
 ## Usage
 
@@ -90,6 +110,41 @@ Force a specific revision / port / size when auto-detection is not enough:
 ./build/lcd-cli clear  --revision TUR_USB
 ```
 
+## Simulation (no hardware) — render to PNG
+
+Any drawing command can run offline: the driver writes into a recording
+transport, the captured byte stream is decoded back into the framebuffer the
+screen would have shown, and the result is written to a PNG. This exercises the
+real protocol encoders of revisions A/B/C/D/WeAct without a screen.
+
+```sh
+./build/lcd-cli text "Hello" --simulate --revision B -o rev_b.png
+./build/lcd-cli image logo.png --simulate --revision C --width 480 --height 800 -o rev_c.png
+./build/lcd-cli clear --simulate --revision D -o rev_d.png
+```
+
+`--simulate` requires an explicit `--revision`; `--output`/`-o` selects the PNG
+(default `screencap.png`). The PNG is the **transmitted framebuffer**: the
+driver's software rotation for the active orientation is already applied on top
+of it (the panel applies its own orientation transform afterwards). To get an
+upright preview for a revision that rotates in software, pick an orientation
+with no rotation — e.g. landscape for revision C:
+
+```sh
+./build/lcd-cli text "Hello" --simulate --revision C --width 480 --height 800 \
+    --orientation landscape -o rev_c.png
+```
+
+The self test does the same thing programmatically for every revision and
+asserts the decoded framebuffer matches the input image:
+
+```sh
+make test        # or: ./build/lcd-selftest
+```
+
+> Native-USB (`TUR_USB`) cannot be simulated: its protocol carries encrypted
+> PNG/JPEG payloads rather than a decodable framebuffer.
+
 ## Library use
 
 ```cpp
@@ -114,13 +169,20 @@ a static library `liblcdctl.a`.
 
 ## Tests
 
-`tests/protocol_parity/run.sh` checks that the C++ revision A driver emits
-**exactly** the same byte stream as the upstream Python implementation for the
-same image (requires a local `turing-smart-screen-python` checkout):
+Two independent checks:
+
+1. **Simulation round-trip** (`make test`, i.e. `build/lcd-selftest`): drives
+   each revision (A/B/C/D/WeAct) offline with a known pattern, decodes the
+   captured wire bytes and asserts the framebuffer matches the input image.
+   No hardware needed.
+2. **Protocol parity** (`tests/protocol_parity/run.sh A`): checks that the C++
+   revision A driver emits **exactly** the same byte stream as the upstream
+   Python implementation for the same image (requires a local
+   `turing-smart-screen-python` checkout).
 
 ```sh
+make test
 tests/protocol_parity/run.sh A
-# PASS: C++ and Python outputs are identical
 ```
 
 ## License
