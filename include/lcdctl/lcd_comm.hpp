@@ -85,6 +85,10 @@ public:
     void displayBitmap(const std::string& path, int x = 0, int y = 0,
                        int width = 0, int height = 0);
 
+    // Paint the whole screen with a single colour (does not use any native
+    // "clear" command, so it works on revisions that ignore it).
+    void fillScreen(Color color);
+
     void displayText(const std::string& text, int x, int y,
                      const TextStyle& style = TextStyle{});
 

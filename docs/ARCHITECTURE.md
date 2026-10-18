@@ -107,6 +107,14 @@ classDiagram
 > that; here all writes are synchronous. If you call the library from several
 > threads, serialize the calls yourself.
 
+> **Deviation from Python (rev A `clear()`):** the upstream project clears with
+> the native `CLEAR` command (102). Some rev. A controllers silently ignore it
+> — the panel keeps showing the previous frame (observed on a UsbPCMonitor
+> 3.5"). `LcdCommRevA::clear()` therefore repaints a blank full-screen bitmap,
+> exactly like revisions B and C already do. `LcdComm::fillScreen(color)` is the
+> generic helper behind it, and `lcd-cli clear --color <c>` can blank the screen
+> in any colour.
+
 ---
 
 ## 4. Transports

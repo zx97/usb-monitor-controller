@@ -96,6 +96,7 @@ distributable static build.
 
 # Basic operations
 ./build/lcd-cli clear
+./build/lcd-cli clear --color black      # blank in a specific colour
 ./build/lcd-cli brightness 40
 ./build/lcd-cli orientation landscape
 ./build/lcd-cli text "Hello USB" --x 20 --y 200 --size 24 --color lime --background black

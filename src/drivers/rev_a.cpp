@@ -93,10 +93,11 @@ void LcdCommRevA::reset() {
 }
 
 void LcdCommRevA::clear() {
-    const Orientation previous = orientation_;
-    setOrientation(Orientation::Portrait);  // orientation must be portrait to clear
-    sendCommand(CmdClear, 0, 0, 0, 0);
-    setOrientation(previous);
+    // The upstream project clears via the native CLEAR command (102), but some
+    // rev. A controllers silently ignore it: the screen keeps showing the last
+    // frame (observed on a UsbPCMonitor 3.5"). Repaint a blank full-screen
+    // bitmap instead, exactly like revisions B and C already do.
+    fillScreen(Color{255, 255, 255});
 }
 
 void LcdCommRevA::screenOff() { sendCommand(CmdScreenOff, 0, 0, 0, 0); }

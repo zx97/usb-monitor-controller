@@ -36,7 +36,7 @@ const char* kUsage =
     "Commands:\n"
     "  list                          List detected screens (serial + native USB)\n"
     "  probe                         Open a screen and print what was detected\n"
-    "  clear                         Clear the screen\n"
+    "  clear                         Clear the screen (blank white; --color to pick)\n"
     "  on                            Turn the screen on\n"
     "  off                           Turn the screen off\n"
     "  brightness <0-100>            Set the brightness\n"
@@ -247,7 +247,12 @@ void applyOrientation(LcdComm& lcd, const Options& options) {
 // Execute a command against an already-initialized display.
 void performAction(LcdComm& lcd, const std::string& command, const Options& options) {
     if (command == "clear") {
-        lcd.clear();
+        const std::string color = options.get("--color", "");
+        if (color.empty()) {
+            lcd.clear();
+        } else {
+            lcd.fillScreen(lcdctl::parseColor(color));
+        }
     } else if (command == "on") {
         lcd.screenOn();
     } else if (command == "off") {

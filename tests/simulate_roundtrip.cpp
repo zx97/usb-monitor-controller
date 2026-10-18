@@ -98,6 +98,47 @@ bool runCase(const Case& testCase) {
     return true;
 }
 
+bool isUniform(const Image& image, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+    const Image rgb = image.convert(3);
+    for (std::size_t i = 0; i + 2 < rgb.size(); i += 3) {
+        if (rgb.data()[i] != r || rgb.data()[i + 1] != g || rgb.data()[i + 2] != b) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// clear() must blank the whole screen, whatever the revision.
+bool runClearCase(const Case& testCase, lcdctl::Color expected) {
+    // Revisions that transmit RGB565 quantize the colour (255 -> 248/252/248);
+    // revision C sends 8-bit BGR/BGRA and keeps the exact value.
+    if (testCase.revision != Revision::C) {
+        expected.r = static_cast<std::uint8_t>((expected.r >> 3) << 3);
+        expected.g = static_cast<std::uint8_t>((expected.g >> 2) << 2);
+        expected.b = static_cast<std::uint8_t>((expected.b >> 3) << 3);
+    }
+
+    auto simulated = lcdctl::createSimulatedLcd(testCase.revision, testCase.storedWidth,
+                                                testCase.storedHeight);
+    simulated.lcd->initializeComm();
+    simulated.lcd->setOrientation(Orientation::Portrait);
+    simulated.transport->clearCaptured();
+
+    simulated.lcd->clear();
+
+    const int width = simulated.lcd->getWidth();
+    const int height = simulated.lcd->getHeight();
+    const Image frame = lcdctl::decodeCapturedStream(testCase.revision,
+                                                    simulated.transport->captured(), width, height);
+
+    if (!isUniform(frame, expected.r, expected.g, expected.b)) {
+        std::printf("FAIL %-8s clear() did not blank the screen\n", testCase.name);
+        return false;
+    }
+    std::printf("PASS %-8s clear() -> blank %dx%d\n", testCase.name, width, height);
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -116,7 +157,9 @@ int main() {
     };
 
     int failures = 0;
+    int checks = 0;
     for (const Case& testCase : cases) {
+        ++checks;
         try {
             if (!runCase(testCase)) {
                 ++failures;
@@ -127,10 +170,27 @@ int main() {
         }
     }
 
+    // clear() must blank the screen (white for A/B/C/D, black for WeAct).
+    for (const Case& testCase : cases) {
+        ++checks;
+        const bool weact = testCase.revision == Revision::WeActA ||
+                           testCase.revision == Revision::WeActB;
+        const lcdctl::Color expected = weact ? lcdctl::Color{0, 0, 0}
+                                             : lcdctl::Color{255, 255, 255};
+        try {
+            if (!runClearCase(testCase, expected)) {
+                ++failures;
+            }
+        } catch (const std::exception& error) {
+            std::printf("FAIL %-8s clear exception: %s\n", testCase.name, error.what());
+            ++failures;
+        }
+    }
+
     if (failures == 0) {
-        std::printf("All %zu simulation round-trips passed.\n", cases.size());
+        std::printf("All %d simulation checks passed.\n", checks);
     } else {
-        std::printf("%d/%zu simulation round-trips failed.\n", failures, cases.size());
+        std::printf("%d/%d simulation checks failed.\n", failures, checks);
     }
     return failures == 0 ? 0 : 1;
 }

@@ -152,6 +152,14 @@ void LcdComm::displayBitmap(const std::string& path, int x, int y, int width, in
     displayPILImage(image, x, y, width, height);
 }
 
+void LcdComm::fillScreen(Color color) {
+    const int width = getWidth();
+    const int height = getHeight();
+    Image image(width, height, 3);
+    fillRect(image, 0, 0, width, height, color);
+    displayPILImage(image, 0, 0);
+}
+
 void LcdComm::displayText(const std::string& text, int x, int y, const TextStyle& style) {
     if (text.empty()) {
         return;
