@@ -165,6 +165,8 @@ a static library `liblcdctl.a`.
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — code structure and the USB
   wire protocols of every revision.
+- [`docs/FINDINGS.md`](docs/FINDINGS.md) — measured throughput, hardware quirks
+  and protocol gotchas discovered while driving real screens.
 - [`docs/BUILD.md`](docs/BUILD.md) — build, packaging, permissions,
   troubleshooting.
 
