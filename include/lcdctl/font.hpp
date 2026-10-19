@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "lcdctl/image.hpp"
 #include "lcdctl/types.hpp"
@@ -35,6 +36,11 @@ public:
     // Bounding box of `text` relative to the drawing origin (baseline anchor
     // is not exposed: the drawing helper positions the top-left corner).
     TextMetrics measure(const std::string& text) const;
+
+    // Cumulative advance widths: `prefixWidths(text)[i]` is the advance width of
+    // text[0..i); the vector has text.size()+1 entries. Much cheaper than
+    // calling measure() on every prefix when wrapping text.
+    std::vector<int> prefixWidths(const std::string& text) const;
 
     // Draw `text` on `dst` with its top-left corner at (x, y).
     // Only RGB and RGBA destinations are supported.

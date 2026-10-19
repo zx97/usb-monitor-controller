@@ -72,6 +72,22 @@ TextMetrics Font::measure(const std::string& text) const {
     return metrics;
 }
 
+std::vector<int> Font::prefixWidths(const std::string& text) const {
+    std::vector<int> widths(text.size() + 1, 0);
+    if (!impl_ || !impl_->face) {
+        return widths;
+    }
+    FT_Face face = impl_->face;
+    int total = 0;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (FT_Load_Char(face, static_cast<unsigned char>(text[i]), FT_LOAD_DEFAULT) == 0) {
+            total += static_cast<int>(face->glyph->advance.x >> 6);
+        }
+        widths[i + 1] = total;
+    }
+    return widths;
+}
+
 void Font::draw(Image& dst, int x, int y, const std::string& text, Color color) const {
     FT_Face face = impl_->face;
     if (dst.channels() != 3 && dst.channels() != 4) {

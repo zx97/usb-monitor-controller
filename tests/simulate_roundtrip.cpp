@@ -195,6 +195,56 @@ bool runConsoleCase() {
     return true;
 }
 
+// Long lines must wrap (word-aware, with a hard break for huge words).
+bool runWrapCase() {
+    auto simulated = lcdctl::createSimulatedLcd(Revision::A, 320, 480);
+    simulated.lcd->initializeComm();
+
+    lcdctl::TextConsole::Options options;
+    options.x = 0;
+    options.y = 0;
+    options.width = 120;
+    options.height = 200;
+    options.fontSize = 12;
+    options.wrap = true;
+    lcdctl::TextConsole console(*simulated.lcd, options);
+    console.clear();
+
+    // A sentence must be split into several lines, without leading/trailing spaces.
+    const std::string sentence =
+        "the quick brown fox jumps over the lazy dog and then keeps on running";
+    console.addLine(sentence);
+    if (console.lineCount() < 3) {
+        std::printf("FAIL wrap: sentence produced only %zu line(s)\n", console.lineCount());
+        return false;
+    }
+    for (const std::string& line : console.lines()) {
+        if (line.empty() || line.front() == ' ' || line.back() == ' ') {
+            std::printf("FAIL wrap: bad line '%s'\n", line.c_str());
+            return false;
+        }
+    }
+
+    // A single word longer than the area must be hard-broken.
+    lcdctl::TextConsole console2(*simulated.lcd, options);
+    console2.clear();
+    console2.addLine(std::string(200, 'W'));
+    for (const std::string& line : console2.lines()) {
+        if (line.size() > 40) {
+            std::printf("FAIL wrap: unbroken long word (%zu chars)\n", line.size());
+            return false;
+        }
+    }
+    if (console2.lineCount() < 5) {
+        std::printf("FAIL wrap: long word produced %zu line(s)\n", console2.lineCount());
+        return false;
+    }
+
+    std::printf("PASS wrap     sentence -> %zu lines, 200-char word -> %zu lines\n",
+                console.lineCount(), console2.lineCount());
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -251,6 +301,17 @@ int main() {
         }
     } catch (const std::exception& error) {
         std::printf("FAIL console exception: %s\n", error.what());
+        ++failures;
+    }
+
+    // Long-line wrapping.
+    ++checks;
+    try {
+        if (!runWrapCase()) {
+            ++failures;
+        }
+    } catch (const std::exception& error) {
+        std::printf("FAIL wrap exception: %s\n", error.what());
         ++failures;
     }
 

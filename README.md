@@ -167,10 +167,12 @@ tail -f app.log | ./build/lcd-cli console
 ./build/lcd-cli console --file script.txt --simulate --revision A -o console.png
 ```
 
-`--lines-per-tick N` advances N lines per tick and `--loop` restarts the file.
-The area defaults to the whole screen from `--x/--y`; `--width/--height` shrink
-it. On revision A a full-screen area costs ~2.4 s per scrolled line, so prefer a
-reduced height (the tool prints the estimate when it starts).
+`--lines-per-tick N` advances N lines per tick, `--loop` restarts the file, and
+`--wrap` wraps long lines onto several console lines (word-aware, with a hard
+break for words wider than the area). The area defaults to the whole screen from
+`--x/--y`; `--width/--height` shrink it. On revision A a full-screen area costs
+~2.4 s per scrolled line, so prefer a reduced height (the tool prints the
+estimate when it starts).
 
 ## Library use
 

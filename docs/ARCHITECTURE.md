@@ -119,7 +119,9 @@ classDiagram
 `TextConsole` (`console.hpp`) builds a terminal-like area on top of
 `displayPILImage()`: while it is still filling it draws only the new line (cheap,
 one row); once full, adding a line shifts the content and redraws the whole area,
-which is where the link budget matters (see `docs/FINDINGS.md` §2).
+which is where the link budget matters (see `docs/FINDINGS.md` §2). Optional
+word-aware wrapping (`--wrap`) uses `Font::prefixWidths()` so breaking a line
+costs O(n) instead of O(n²).
 
 ---
 

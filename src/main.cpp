@@ -56,6 +56,7 @@ const char* kUsage =
     "  --interval <s>                prompter mode: advance automatically every <s> seconds\n"
     "  --lines-per-tick <n>          lines added per tick (default 1)\n"
     "  --loop                        restart the file when it ends\n"
+    "  --wrap                        wrap long lines instead of clipping them\n"
     "  --gap <px>                    extra spacing between lines (default 2)\n"
     "  The area defaults to the whole screen from (--x,--y); use --width/--height to\n"
     "  shrink the redrawn area (a smaller area scrolls much faster).\n"
@@ -101,8 +102,8 @@ struct Options {
 };
 
 Options parseArgs(int argc, char** argv) {
-    static const std::vector<std::string> booleanFlags = {"--reset", "--simulate",
-                                                          "--verbose", "-v", "-h", "--help"};
+    static const std::vector<std::string> booleanFlags = {"--reset", "--simulate", "--verbose",
+                                                          "--wrap", "--loop", "-v", "-h", "--help"};
     Options options;
     for (int i = 1; i < argc; ++i) {
         std::string token = argv[i];
@@ -326,6 +327,7 @@ void performAction(LcdComm& lcd, const std::string& command, const Options& opti
         // White on black, anti-aliased (FreeType coverage blending).
         consoleOptions.textColor = lcdctl::parseColor(options.get("--color", "white"));
         consoleOptions.background = lcdctl::parseColor(options.get("--background", "black"));
+        consoleOptions.wrap = options.flag("--wrap");
 
         lcdctl::TextConsole console(lcd, consoleOptions);
         console.clear();

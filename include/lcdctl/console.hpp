@@ -8,6 +8,7 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "lcdctl/font.hpp"
 #include "lcdctl/lcd_comm.hpp"
@@ -32,6 +33,9 @@ public:
         int lineGap = 2;
         Color textColor{255, 255, 255};
         Color background{0, 0, 0};
+        // When true, lines wider than the area are wrapped onto several lines
+        // (word-aware, falling back to a hard break for very long words).
+        bool wrap = false;
     };
 
     // Throws std::invalid_argument if the area does not fit the display.
@@ -45,11 +49,18 @@ public:
     // Blank the whole area and forget the lines.
     void clear();
 
-    // Append a line, scrolling the area up when it is already full.
+    // Append a line, scrolling the area up when it is already full. When
+    // Options::wrap is set, one input line may produce several console lines.
     void addLine(const std::string& text);
 
 private:
     void draw(int firstLine, int count, int drawHeight);
+
+    // Append one already-fitting line (scrolling when full).
+    void appendLine(const std::string& text);
+
+    // Split `text` so each piece fits Options::width.
+    std::vector<std::string> wrapLine(const std::string& text) const;
 
     LcdComm& lcd_;
     Options options_;

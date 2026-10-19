@@ -57,7 +57,60 @@ void TextConsole::draw(int firstLine, int count, int drawHeight) {
     lcd_.displayPILImage(image, options_.x, options_.y + firstLine * lineHeight_);
 }
 
+std::vector<std::string> TextConsole::wrapLine(const std::string& text) const {
+    std::vector<std::string> lines;
+    if (text.empty()) {
+        lines.emplace_back();
+        return lines;
+    }
+
+    // Advance width of every prefix, so a break can be found in O(n).
+    const std::vector<int> prefix = font_->prefixWidths(text);
+    const std::size_t length = text.size();
+    std::size_t start = 0;
+
+    while (start < length) {
+        // Widest end that still fits, starting from `start`.
+        std::size_t end = start;
+        while (end < length && (prefix[end + 1] - prefix[start]) <= options_.width) {
+            ++end;
+        }
+        if (end >= length) {
+            lines.push_back(text.substr(start));
+            break;
+        }
+        if (end == start) {
+            end = start + 1;  // a single character is wider than the area
+        }
+
+        // Prefer breaking at the last space, so words are not cut.
+        std::size_t breakAt = end;
+        const std::size_t space = text.rfind(' ', end - 1);
+        if (space != std::string::npos && space > start) {
+            breakAt = space;
+        }
+
+        lines.push_back(text.substr(start, breakAt - start));
+        start = (breakAt < end) ? breakAt + 1 : breakAt;  // skip the break space
+    }
+
+    if (lines.empty()) {
+        lines.emplace_back();
+    }
+    return lines;
+}
+
 void TextConsole::addLine(const std::string& text) {
+    if (!options_.wrap) {
+        appendLine(text);
+        return;
+    }
+    for (const std::string& part : wrapLine(text)) {
+        appendLine(part);
+    }
+}
+
+void TextConsole::appendLine(const std::string& text) {
     if (static_cast<int>(lines_.size()) < capacity_) {
         // Still filling up: nothing above changes, so only draw the new line.
         lines_.push_back(text);
