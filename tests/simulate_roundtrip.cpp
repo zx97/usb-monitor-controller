@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "lcdctl/console.hpp"
 #include "lcdctl/drivers.hpp"
 #include "lcdctl/logging.hpp"
 #include "lcdctl/simulate.hpp"
@@ -139,6 +140,61 @@ bool runClearCase(const Case& testCase, lcdctl::Color expected) {
     return true;
 }
 
+// The scrolling console: once full, adding a line drops the oldest one.
+bool runConsoleCase() {
+    auto simulated = lcdctl::createSimulatedLcd(Revision::A, 320, 480);
+    simulated.lcd->initializeComm();
+    simulated.lcd->setOrientation(Orientation::Portrait);
+
+    lcdctl::TextConsole::Options options;
+    options.x = 0;
+    options.y = 0;
+    options.width = 200;
+    options.height = 100;
+    options.fontSize = 12;
+    lcdctl::TextConsole console(*simulated.lcd, options);
+    console.clear();
+    simulated.transport->clearCaptured();
+
+    const int capacity = console.capacity();
+    if (capacity < 2) {
+        std::printf("FAIL console capacity=%d is too small for the test\n", capacity);
+        return false;
+    }
+    const int total = capacity + 3;
+    for (int i = 0; i < total; ++i) {
+        console.addLine("line " + std::to_string(i));
+    }
+
+    const std::string expectedFirst = "line " + std::to_string(total - capacity);
+    const std::string expectedLast = "line " + std::to_string(total - 1);
+    if (static_cast<int>(console.lineCount()) != capacity ||
+        console.lines().front() != expectedFirst || console.lines().back() != expectedLast) {
+        std::printf("FAIL console scroll: %zu lines, first='%s' (expected '%s')\n",
+                    console.lineCount(), console.lines().front().c_str(), expectedFirst.c_str());
+        return false;
+    }
+
+    // The last frame must actually contain text (some bright pixels).
+    const Image frame = lcdctl::decodeCapturedStream(Revision::A, simulated.transport->captured(),
+                                                     320, 480);
+    std::size_t bright = 0;
+    const Image rgb = frame.convert(3);
+    for (std::size_t i = 0; i + 2 < rgb.size(); i += 3) {
+        if (rgb.data()[i] + rgb.data()[i + 1] + rgb.data()[i + 2] > 300) {
+            ++bright;
+        }
+    }
+    if (bright == 0) {
+        std::printf("FAIL console: decoded frame is blank\n");
+        return false;
+    }
+
+    std::printf("PASS console  %d lines visible, scroll drops the oldest, %zu bright px\n", capacity,
+                bright);
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -185,6 +241,17 @@ int main() {
             std::printf("FAIL %-8s clear exception: %s\n", testCase.name, error.what());
             ++failures;
         }
+    }
+
+    // Scrolling console behaviour.
+    ++checks;
+    try {
+        if (!runConsoleCase()) {
+            ++failures;
+        }
+    } catch (const std::exception& error) {
+        std::printf("FAIL console exception: %s\n", error.what());
+        ++failures;
     }
 
     if (failures == 0) {

@@ -32,6 +32,7 @@ add_library(lcdctl STATIC
     src/font.cpp
     src/transport.cpp
     src/lcd_comm.cpp
+    src/console.cpp
     src/simulate.cpp
     src/simulate_rev_c.cpp
     src/drivers/rev_a.cpp

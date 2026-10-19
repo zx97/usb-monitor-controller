@@ -6,15 +6,19 @@
 // https://github.com/mathoudebine/turing-smart-screen-python/
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
+#include "lcdctl/console.hpp"
 #include "lcdctl/drivers.hpp"
 #include "lcdctl/factory.hpp"
 #include "lcdctl/image.hpp"
@@ -44,6 +48,17 @@ const char* kUsage =
     "  orientation <value>           portrait|landscape|reverse-portrait|reverse-landscape\n"
     "  text <text>                   Display text (see --x --y --size --color --background)\n"
     "  image <path>                  Display a PNG/JPEG image\n"
+    "  console                       Scrolling text console / teleprompter (white on black,\n"
+    "                                anti-aliased); reads stdin, or --file, see below\n"
+    "\n"
+    "Console options:\n"
+    "  --file <path>                 read lines from a file instead of stdin\n"
+    "  --interval <s>                prompter mode: advance automatically every <s> seconds\n"
+    "  --lines-per-tick <n>          lines added per tick (default 1)\n"
+    "  --loop                        restart the file when it ends\n"
+    "  --gap <px>                    extra spacing between lines (default 2)\n"
+    "  The area defaults to the whole screen from (--x,--y); use --width/--height to\n"
+    "  shrink the redrawn area (a smaller area scrolls much faster).\n"
     "\n"
     "Options:\n"
     "  --revision <A|B|C|D|TUR_USB|WEACT_A|WEACT_B|AUTO>   default: AUTO\n"
@@ -297,6 +312,80 @@ void performAction(LcdComm& lcd, const std::string& command, const Options& opti
         style.backgroundColor = lcdctl::parseColor(options.get("--background", "white"));
         style.align = options.get("--align", "left");
         lcd.displayText(text, options.getInt("--x", 0), options.getInt("--y", 0), style);
+    } else if (command == "console") {
+        const bool simulate = options.flag("--simulate");
+
+        lcdctl::TextConsole::Options consoleOptions;
+        consoleOptions.x = options.getInt("--x", 0);
+        consoleOptions.y = options.getInt("--y", 0);
+        consoleOptions.width = options.getInt("--width", lcd.getWidth() - consoleOptions.x);
+        consoleOptions.height = options.getInt("--height", lcd.getHeight() - consoleOptions.y);
+        consoleOptions.font = options.get("--font", "");
+        consoleOptions.fontSize = options.getInt("--size", 14);
+        consoleOptions.lineGap = options.getInt("--gap", 2);
+        // White on black, anti-aliased (FreeType coverage blending).
+        consoleOptions.textColor = lcdctl::parseColor(options.get("--color", "white"));
+        consoleOptions.background = lcdctl::parseColor(options.get("--background", "black"));
+
+        lcdctl::TextConsole console(lcd, consoleOptions);
+        console.clear();
+
+        if (!simulate) {
+            // Rough link budget: ~122 kB/s (RGB565, 2 bytes/pixel) on revision A.
+            const double areaBytes =
+                static_cast<double>(consoleOptions.width) * console.capacity() *
+                console.lineHeight() * 2;
+            std::fprintf(stderr,
+                         "console: %d lines of %d px, full redraw ~%.1f s per line when full\n",
+                         console.capacity(), console.lineHeight(), areaBytes / 122000.0);
+        }
+
+        const std::string file = options.get("--file", "");
+        std::ifstream fileStream;
+        std::istream* input = &std::cin;
+        if (!file.empty()) {
+            fileStream.open(file);
+            if (!fileStream) {
+                throw std::runtime_error("cannot open " + file);
+            }
+            input = &fileStream;
+        }
+
+        const double interval = std::stod(options.get("--interval", "0"));
+        const int perTick = std::max(1, options.getInt("--lines-per-tick", 1));
+        const bool loop = options.flag("--loop");
+
+        if (simulate || interval > 0) {
+            // Read everything first (offline preview / paced prompter).
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(*input, line)) {
+                lines.push_back(line);
+            }
+            if (interval <= 0) {
+                for (const std::string& text : lines) {
+                    console.addLine(text);
+                }
+            } else {
+                do {
+                    for (std::size_t i = 0; i < lines.size(); i += perTick) {
+                        const std::size_t end = std::min(lines.size(), i + perTick);
+                        for (std::size_t j = i; j < end; ++j) {
+                            console.addLine(lines[j]);
+                        }
+                        if (!simulate) {
+                            std::this_thread::sleep_for(std::chrono::duration<double>(interval));
+                        }
+                    }
+                } while (loop && !simulate);
+            }
+        } else {
+            // Live streaming: e.g. `tail -f app.log | lcd-cli console`.
+            std::string line;
+            while (std::getline(*input, line)) {
+                console.addLine(line);
+            }
+        }
     } else {
         throw std::runtime_error("unknown command: " + command);
     }

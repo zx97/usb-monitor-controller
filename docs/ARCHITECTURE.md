@@ -53,6 +53,7 @@ Two ideas drive the design:
 | `include/lcdctl/factory.hpp` | `Revision`, detection, `createLcd()`. |
 | `include/lcdctl/paths.hpp` | Locates the bundled `res/` directory and default font. |
 | `include/lcdctl/simulate.hpp` | Offline simulation: recording transport + per-revision decoders. |
+| `include/lcdctl/console.hpp`, `src/console.cpp` | Terminal-like scrolling text area (console / teleprompter). |
 | `src/simulate.cpp` | Simulation transport, decoders for A/B/D/WeAct, simulated driver factory. |
 | `src/simulate_rev_c.cpp` | Revision C decoder (0xef69 framing, full + partial updates). |
 | `tests/simulate_roundtrip.cpp` | Round-trip self test (`lcd-selftest`). |
@@ -114,6 +115,11 @@ classDiagram
 > exactly like revisions B and C already do. `LcdComm::fillScreen(color)` is the
 > generic helper behind it, and `lcd-cli clear --color <c>` can blank the screen
 > in any colour.
+
+`TextConsole` (`console.hpp`) builds a terminal-like area on top of
+`displayPILImage()`: while it is still filling it draws only the new line (cheap,
+one row); once full, adding a line shifts the content and redraws the whole area,
+which is where the link budget matters (see `docs/FINDINGS.md` §2).
 
 ---
 

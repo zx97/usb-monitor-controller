@@ -45,11 +45,14 @@ DOWNLOAD_DIR="${WORK_DIR}/downloads"
 SRC_DIR="${WORK_DIR}/src"
 BUILD_DIR="${WORK_DIR}/build"
 TOOLCHAIN_DIR="${WORK_DIR}/toolchain"
-PROJECT_BUILD_DIR="${WORK_DIR}/project"
 DIST_DIR="${PROJECT_ROOT}/dist-static"
 
 # Local install prefix for the freshly built static libraries.
 PREFIX="${PREFIX:-${WORK_DIR}/prefix}"
+
+# The project build tree is keyed on the prefix so switching prefixes (e.g. the
+# --with-openssl run) can never reuse a CMake cache configured for another one.
+PROJECT_BUILD_DIR="${WORK_DIR}/project-$(basename "$PREFIX")"
 
 # Homebrew is the sanctioned package manager for build tools.
 BREW="${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}"
@@ -406,7 +409,9 @@ build_openssl() {
 # ---------------------------------------------------------------------------
 build_project() {
     info "configuring lcd-cli against the static prefix"
-    cmake -S "$PROJECT_ROOT" -B "$PROJECT_BUILD_DIR" -G Ninja \
+    # --fresh: never reuse a CMakeCache that may have been configured for a
+    # different prefix (that is how a dynamic OpenSSL dependency sneaked in).
+    cmake --fresh -S "$PROJECT_ROOT" -B "$PROJECT_BUILD_DIR" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++" \
         -DLCDCTL_BUILD_TESTS=OFF \
@@ -489,7 +494,9 @@ main() {
 
     if [ "$CLEAN" -eq 1 ]; then
         info "--clean: removing ${PREFIX} and intermediate build trees"
-        rm -rf "$PREFIX" "${BUILD_DIR}" "${SRC_DIR}" "${PROJECT_BUILD_DIR}" "${TOOLCHAIN_DIR}" "${DIST_DIR}"
+        rm -rf "$PREFIX" "${BUILD_DIR}" "${SRC_DIR}" "${TOOLCHAIN_DIR}" "${DIST_DIR}"
+        # Project build trees are keyed on the prefix name: remove every variant.
+        rm -rf "${WORK_DIR}/project" "${WORK_DIR}"/project-*
     fi
 
     mkdir -p "$PREFIX" "$WORK_DIR"

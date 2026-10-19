@@ -146,6 +146,32 @@ make test        # or: ./build/lcd-selftest
 > Native-USB (`TUR_USB`) cannot be simulated: its protocol carries encrypted
 > PNG/JPEG payloads rather than a decodable framebuffer.
 
+## Console / teleprompter
+
+`console` renders a terminal-like scrolling text area: lines appear at the top,
+and once the area is full the content shifts up so the top line disappears and
+the new line arrives at the bottom. Text is **white on black, anti-aliased**
+(configurable with `--color` / `--background`).
+
+```sh
+# live console: stream a log or any command output
+tail -f app.log | ./build/lcd-cli console
+
+# teleprompter: one new line every 3 seconds
+./build/lcd-cli console --file script.txt --interval 3
+
+# smaller area scrolls much faster (recommended on revision A)
+./build/lcd-cli console --file script.txt --interval 2 --height 160 --size 13
+
+# preview offline, no hardware
+./build/lcd-cli console --file script.txt --simulate --revision A -o console.png
+```
+
+`--lines-per-tick N` advances N lines per tick and `--loop` restarts the file.
+The area defaults to the whole screen from `--x/--y`; `--width/--height` shrink
+it. On revision A a full-screen area costs ~2.4 s per scrolled line, so prefer a
+reduced height (the tool prints the estimate when it starts).
+
 ## Library use
 
 ```cpp

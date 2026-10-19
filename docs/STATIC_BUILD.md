@@ -220,4 +220,5 @@ Each download is verified against a SHA-256 digest recorded in the script.
 | `Package 'openssl' not found` during configure | Expected without `--with-openssl`; `TUR_USB` is then disabled |
 | Configure picks a Homebrew `.so` | Make sure no stale `PKG_CONFIG_PATH` is exported; the script overrides it |
 | `ldd` shows `libstdc++.so` | The static runtime was not staged; check the "static C++ runtime" log line |
+| Runtime error `libssl.so.*: cannot open shared object file` | A CMake cache from an earlier `--with-openssl` run was reused. The project build tree is now keyed on the prefix and configured with `--fresh`; re-run `tools/build-static.sh --clean` |
 | Device not listed | Check permissions (`dialout`/`uucp` group) and that the device is not claimed by `brltty`/`ModemManager` |

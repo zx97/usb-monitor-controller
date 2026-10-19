@@ -233,6 +233,7 @@ region sizes (a throwaway harness, ~16 µs/pixel).
 * Revision C video/media mode.
 * libusb hotplug notifications in the static build (`--disable-udev`): re-run
   `lcd-cli list` after plugging a device.
-* A ticker/teleprompter helper: feasible for band-sized regions (see §2), not
-  implemented.
+* A horizontal scrolling ticker (`lcd-cli ticker`): feasible for band-sized
+  regions (see §2) but not implemented; the vertical scrolling console
+  (`lcd-cli console`) is.
 * Windows support: the serial transport is POSIX-only (`#ifdef` stub elsewhere).
