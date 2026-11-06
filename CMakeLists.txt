@@ -103,7 +103,9 @@ add_custom_target(lcdctl-resources ALL
             "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts" "${CMAKE_CURRENT_BINARY_DIR}/res/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/res/themes" "${CMAKE_CURRENT_BINARY_DIR}/res/themes"
-    COMMENT "Copying res/fonts and res/themes next to the binaries")
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/res/icons" "${CMAKE_CURRENT_BINARY_DIR}/res/icons"
+    COMMENT "Copying res/fonts, res/themes and res/icons next to the binaries")
 
 if(LCDCTL_BUILD_CLI)
     add_executable(lcd-cli src/main.cpp)
