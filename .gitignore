@@ -19,3 +19,13 @@ compile_commands.json
 
 # Created by the upstream Python library when running the parity test
 log.log
+
+# OpenCode / MCP tool caches
+.opencode/
+local_cache/
+
+# Generated previews and simulation frames
+screencap.png
+theme-preview.png
+frame.png
+frames/

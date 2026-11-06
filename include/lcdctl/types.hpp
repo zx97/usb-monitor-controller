@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 
@@ -44,6 +45,41 @@ Color parseColor(const std::string& text);
 struct Size {
     int width = 0;
     int height = 0;
+};
+
+// Axis-aligned rectangle; width/height are always >= 0 when produced by the
+// drawing primitives.
+struct Rect {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+
+    int right() const { return x + width; }
+    int bottom() const { return y + height; }
+    bool empty() const { return width <= 0 || height <= 0; }
+
+    static Rect fromCorners(int left, int top, int right, int bottom) {
+        return {left, top, right - left, bottom - top};
+    }
+
+    Rect united(const Rect& other) const {
+        if (empty()) return other;
+        if (other.empty()) return *this;
+        const int l = std::min(x, other.x);
+        const int t = std::min(y, other.y);
+        const int r = std::max(right(), other.right());
+        const int b = std::max(bottom(), other.bottom());
+        return fromCorners(l, t, r, b);
+    }
+
+    Rect clipped(int maxWidth, int maxHeight) const {
+        const int l = std::max(0, x);
+        const int t = std::max(0, y);
+        const int r = std::min(maxWidth, right());
+        const int b = std::min(maxHeight, bottom());
+        return fromCorners(l, t, r, b);
+    }
 };
 
 }  // namespace lcdctl

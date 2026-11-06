@@ -46,6 +46,19 @@ public:
     // Only RGB and RGBA destinations are supported.
     void draw(Image& dst, int x, int y, const std::string& text, Color color) const;
 
+    // Draw `text` on `dst` with the pen origin on the baseline at (x, baseline).
+    // This is the anchor primitive used by the themed text renderer.
+    void drawAtBaseline(Image& dst, int x, int baseline, const std::string& text,
+                        Color color) const;
+
+    // Ink bounding box of `text` relative to the pen origin on the baseline:
+    // `top` is negative above the baseline, `bottom` positive below it.
+    TextMetrics inkBox(const std::string& text) const;
+
+    // Font vertical metrics in pixels.
+    int ascent() const;
+    int descent() const;   // positive value below the baseline
+
     int lineHeight() const;
 
 private:

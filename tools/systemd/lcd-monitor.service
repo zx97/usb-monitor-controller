@@ -1,0 +1,21 @@
+[Unit]
+Description=USB LCD system monitor (USB-monitor-controller)
+Documentation=file:/usr/local/share/doc/usb-monitor-controller/THEMES.md
+After=multi-user.target
+
+[Service]
+Type=simple
+# The daemon needs the serial device: adjust User/Group to your session user
+# (member of the "dialout" group on Fedora).
+User=%i
+SupplementaryGroups=dialout
+ExecStart=/usr/local/bin/lcd-monitor --headless --config /etc/usb-monitor-controller/config.yaml
+Restart=always
+RestartSec=3
+# Revision A may disconnect and renumber its tty when it resets.
+TimeoutStopSec=5
+KillSignal=SIGTERM
+Environment=LIBUSB_DEBUG=0
+
+[Install]
+WantedBy=multi-user.target

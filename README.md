@@ -24,6 +24,12 @@ interface (`/dev/ttyACM*`, `COMx`) or their **native USB vendor interface**
 - PNG/JPEG image loading (libpng / libjpeg-turbo).
 - `lcd-cli` command line tool: list, probe, clear, on/off, brightness, LED,
   orientation, text, image.
+- **System monitor**: `lcd-monitor` renders the upstream `theme.yaml` themes
+  with live CPU/GPU/memory/disk/network/date metrics, partial updates, a KDE
+  tray icon (screen on/off, brightness, theme, autostart) and automatic
+  reconnection.
+- **Theme tooling**: `lcd-theme` (list/show/validate/preview to PNG without
+  hardware) and `lcd-theme-editor`, a Qt6 visual editor with a live preview.
 - Native-USB (TUR_USB) support with the vendor DES-encrypted protocol, built
   automatically when libusb + OpenSSL are available.
 
@@ -48,8 +54,12 @@ Python code (unit-testable but not yet confirmed on physical hardware).
 Everything is installable with [Homebrew](https://brew.sh):
 
 ```sh
-brew install cmake ninja pkg-config libpng jpeg-turbo freetype libusb openssl@3
+brew install cmake ninja pkg-config libpng jpeg-turbo freetype libusb openssl@3 yaml-cpp
 ```
+
+Theme support needs `yaml-cpp`. The tray icon and the editor need **Qt6 Widgets**
+(the distribution Qt is preferred: KDE runs against it). Without Qt6,
+`lcd-monitor` still builds and runs headless.
 
 `libusb` + `openssl@3` are optional: without them the project still builds and
 only native-USB (`TUR_USB`) support is disabled.
@@ -174,6 +184,46 @@ break for words wider than the area). The area defaults to the whole screen from
 ~2.4 s per scrolled line, so prefer a reduced height (the tool prints the
 estimate when it starts).
 
+## System monitor (themes, sensors, tray)
+
+`lcd-monitor` turns the screen into a system monitor using the **unchanged**
+`theme.yaml` format of the Python project. A bundled 320x480 theme is included;
+point `--root` at a `turing-smart-screen-python` checkout to use any of the 73
+upstream themes.
+
+```sh
+# One sample as JSON (sanity check of the sensors)
+./build/lcd-monitor --once
+
+# Tray icon (KDE/XDG): screen on/off, brightness, theme picker,
+# "Edit theme...", "Start at login", Quit. Needs a session; otherwise headless.
+./build/lcd-monitor
+
+# No GUI: systemd, ssh, or a kiosk
+./build/lcd-monitor --headless --theme 3.5inchTheme2 \
+    --root ~/src/turing-smart-screen-python/res/themes \
+    --fonts ~/src/turing-smart-screen-python/res/fonts
+
+# Render a theme to PNG, no screen needed (same renderer as the daemon)
+./build/lcd-theme preview 3.5inchTheme2 --output preview.png
+./build/lcd-theme validate 3.5inchTheme2
+```
+
+See [`docs/THEMES.md`](docs/THEMES.md) for the supported YAML keys, the metric
+sources (`/proc`, `/sys/class/hwmon`, NVML), the refresh strategy and the
+systemd unit. `tools/systemd/lcd-monitor.service` is ready to install.
+
+## Theme editor
+
+`lcd-theme-editor` is a Qt6 (KDE) application: item list, live preview rendered
+by the same engine as the panel, drag to move, spin boxes for geometry and font
+style, `Save` (with a `theme.yaml.bak` backup). It is also reachable from the
+tray icon menu.
+
+```sh
+./build/lcd-theme-editor build/res/themes build/res/fonts demo-320x480
+```
+
 ## Library use
 
 ```cpp
@@ -197,6 +247,7 @@ a static library `liblcdctl.a`.
   and protocol gotchas discovered while driving real screens.
 - [`docs/BUILD.md`](docs/BUILD.md) — build, packaging, permissions,
   troubleshooting.
+- [`docs/THEMES.md`](docs/THEMES.md) — themes, sensors, daemon, editor.
 
 ## Tests
 

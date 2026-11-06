@@ -7,6 +7,10 @@
 #   make list       list connected screens
 #   make probe      open a screen and print what was detected
 #   make sim        render a sample frame offline to screencap.png
+#   make monitor    run the system-monitor daemon (tray icon when available)
+#   make themes     list the themes available to the daemon
+#   make preview    render the demo theme to theme-preview.png
+#   make editor     open the Qt6 theme editor on the demo theme
 #   make static     build a distributable binary with static dependencies
 #   make clean      remove build directories
 #
@@ -27,7 +31,8 @@ BUILD_TYPE  ?= Release
 CMAKE_FLAGS ?=
 JOBS        ?= $(shell nproc 2>/dev/null || echo 4)
 
-.PHONY: all build help test list probe sim static static-clean clean distclean
+.PHONY: all build help test list probe sim static static-clean clean distclean \
+        monitor monitor-headless themes preview editor
 
 all: build
 
@@ -38,6 +43,11 @@ help:
 	@echo "  make list       list connected LCD screens"
 	@echo "  make probe      open a screen and print its details"
 	@echo "  make sim        render a sample frame offline -> screencap.png"
+	@echo "  make monitor    run the system-monitor daemon (tray icon if available)"
+	@echo "  make monitor-headless  daemon without GUI (systemd/ssh)"
+	@echo "  make themes     list the themes available"
+	@echo "  make preview    render the demo theme -> theme-preview.png"
+	@echo "  make editor     open the Qt6 theme editor"
 	@echo "  make static     build a distributable, statically-linked binary"
 	@echo "  make static-clean  rebuild it from scratch (recompiles dependencies)"
 	@echo "  make clean      remove build/ and build-static/"
@@ -68,6 +78,22 @@ sim: build
 	./$(BUILD_DIR)/lcd-cli text "USB-monitor-controller" --simulate --revision A \
 		--x 20 --y 220 --size 20 --color cyan --background black -o screencap.png
 	@echo "Rendered frame written to screencap.png"
+
+monitor: build
+	./$(BUILD_DIR)/lcd-monitor $(ARGS)
+
+monitor-headless: build
+	./$(BUILD_DIR)/lcd-monitor --headless $(ARGS)
+
+themes: build
+	./$(BUILD_DIR)/lcd-theme list
+
+preview: build
+	./$(BUILD_DIR)/lcd-theme preview demo-320x480 -o theme-preview.png
+	@echo "Rendered theme-preview.png"
+
+editor: build
+	./$(BUILD_DIR)/lcd-theme-editor "$(BUILD_DIR)/res/themes" "$(BUILD_DIR)/res/fonts" demo-320x480
 
 static:
 	tools/build-static.sh

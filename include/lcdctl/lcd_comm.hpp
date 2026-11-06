@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "lcdctl/draw.hpp"
 #include "lcdctl/font.hpp"
 #include "lcdctl/image.hpp"
 #include "lcdctl/paths.hpp"
@@ -21,47 +22,26 @@
 
 namespace lcdctl {
 
-// Options for displayText(). Defaults mirror the Python project.
-struct TextStyle {
-    int width = 0;                 // 0 => whole display width
-    int height = 0;                // 0 => derived from the font size
-    std::string font;              // empty => bundled Roboto Mono
-    int fontSize = 20;
-    Color fontColor{0, 0, 0};
-    Color backgroundColor{255, 255, 255};
-    std::string backgroundImage;   // empty => solid backgroundColor
-    std::string align = "left";    // "left" | "center" | "right"
-};
+// ---------------------------------------------------------------------------
+// Text / radial style structures live in draw.hpp (shared with the offscreen
+// renderer); they are re-exported here for source compatibility.
+// ---------------------------------------------------------------------------
+using TextStyle = ::lcdctl::TextStyle;
+using RadialStyle = ::lcdctl::RadialStyle;
 
-struct RadialStyle {
-    int minValue = 0;
-    int maxValue = 100;
-    double angleStart = 0;
-    double angleEnd = 360;
-    int angleSep = 5;
-    int angleSteps = 10;
-    bool clockwise = true;
-    bool withText = true;
-    std::string text;              // empty => "NN%"
-    std::string font;
-    int fontSize = 20;
-    Color fontColor{0, 0, 0};
-    Color barColor{0, 0, 0};
-    Color backgroundColor{255, 255, 255};
-    std::string backgroundImage;
-    Color barBackgroundColor{0, 0, 0};
-    bool drawBarBackground = false;
-};
-
-class LcdComm {
+class LcdComm : public DrawSurface {
 public:
     LcdComm(std::unique_ptr<Transport> transport, int displayWidth, int displayHeight);
     virtual ~LcdComm() = default;
 
     int getWidth() const;
     int getHeight() const;
-    Size size() const { return {getWidth(), getHeight()}; }
+    Size size() const override { return {getWidth(), getHeight()}; }
     Orientation orientation() const { return orientation_; }
+
+    // DrawSurface: the on-screen surface forwards every crop to the transport.
+    const Image& cachedImage(const std::string& path) override;
+    std::shared_ptr<Font> cachedFont(const std::string& path, int size) override;
 
     // ------------------------------------------------------------------
     // Revision-specific interface
@@ -73,8 +53,14 @@ public:
     virtual void screenOn() = 0;
     virtual void setBrightness(int level) = 0;
     virtual void setOrientation(Orientation orientation) = 0;
-    virtual void displayPILImage(const Image& image, int x = 0, int y = 0,
-                                 int imageWidth = 0, int imageHeight = 0) = 0;
+
+    // DrawSurface entry point: forward to the revision-specific 4-argument
+    // form (imageWidth/imageHeight are used by a few revisions for scaling).
+    void displayPILImage(const Image& image, int x, int y) override {
+        displayPILImage(image, x, y, 0, 0);
+    }
+    virtual void displayPILImage(const Image& image, int x, int y, int imageWidth,
+                                 int imageHeight) = 0;
 
     // Optional: backplate RGB LED (rev B "flagship" only).
     virtual void setBackplateLedColor(Color color) { (void)color; }
@@ -91,6 +77,24 @@ public:
 
     void displayText(const std::string& text, int x, int y,
                      const TextStyle& style = TextStyle{});
+
+    // Same primitives, style-structure flavour (used by the theme renderer).
+    Rect displayTextStyled(const std::string& text, int x, int y, const TextStyle& style) {
+        return drawText(*this, text, x, y, style);
+    }
+    Rect displayProgressBarStyled(int x, int y, int width, int height, int value,
+                                  const ProgressBarStyle& style) {
+        return drawProgressBar(*this, x, y, width, height, value, style);
+    }
+    Rect displayLineGraphStyled(int x, int y, int width, int height,
+                                const std::vector<float>& values,
+                                const LineGraphStyle& style) {
+        return drawLineGraph(*this, x, y, width, height, values, style);
+    }
+    Rect displayRadialProgressBarStyled(int xc, int yc, int radius, int barWidth, int value,
+                                        const RadialStyle& style) {
+        return drawRadialProgressBar(*this, xc, yc, radius, barWidth, value, style);
+    }
 
     void displayProgressBar(int x, int y, int width, int height,
                             int minValue, int maxValue, int value,
@@ -118,9 +122,6 @@ protected:
     void sendLine(const std::vector<std::uint8_t>& line);
     std::vector<std::uint8_t> readData(std::size_t size);
     void flushInput();
-
-    const Image& cachedImage(const std::string& path);
-    std::shared_ptr<Font> cachedFont(const std::string& path, int size);
 
     std::unique_ptr<Transport> transport_;
     int displayWidth_;

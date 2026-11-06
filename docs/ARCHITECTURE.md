@@ -13,6 +13,7 @@ scheduling.
 - [5. USB wire protocols](#5-usb-wire-protocols)
 - [6. Revision detection & factory](#6-revision-detection--factory)
 - [7. Relationship to the Python project](#7-relationship-to-the-python-project)
+- [8. Theme layer and daemon](#8-theme-layer-and-daemon)
 
 ---
 
@@ -54,6 +55,15 @@ Two ideas drive the design:
 | `include/lcdctl/paths.hpp` | Locates the bundled `res/` directory and default font. |
 | `include/lcdctl/simulate.hpp` | Offline simulation: recording transport + per-revision decoders. |
 | `include/lcdctl/console.hpp`, `src/console.cpp` | Terminal-like scrolling text area (console / teleprompter). |
+| `include/lcdctl/draw.hpp`, `src/draw.cpp` | Drawing primitives (text/bar/graph/radial) on a `DrawSurface`: on-screen (`LcdComm`) or offscreen (`OffscreenCanvas`). Pillow-compatible anchors. |
+| `include/lcdctl/theme.hpp`, `src/theme.cpp` | `theme.yaml` reader/writer: static images/texts, stats items, validation. |
+| `include/lcdctl/theme_render.hpp`, `src/theme_render.cpp` | Metric formatting (psutil-compatible) + `ThemeRenderer` (change detection, graph history). |
+| `include/lcdctl/sensors.hpp`, `src/sensors*.cpp` | `Metrics`, providers (Linux procfs/sysfs/NVML, static, random), `MetricsStore`. |
+| `include/lcdctl/monitor.hpp`, `src/monitor.cpp` | `MonitorEngine`: deadline-driven scheduler, partial updates, simulation renderer. |
+| `include/lcdctl/settings.hpp`, `src/settings.cpp` | `config.yaml` (upstream keys + `app:`), XDG autostart entry. |
+| `src/tools/theme_cli.cpp` | `lcd-theme`: list / show / validate / preview. |
+| `src/tools/monitor_main.cpp` | `lcd-monitor`: tray (Qt6) / headless daemon / JSON / simulation. |
+| `src/tools/theme_editor.cpp` | `lcd-theme-editor`: Qt6 visual theme editor. |
 | `src/simulate.cpp` | Simulation transport, decoders for A/B/D/WeAct, simulated driver factory. |
 | `src/simulate_rev_c.cpp` | Revision C decoder (0xef69 framing, full + partial updates). |
 | `tests/simulate_roundtrip.cpp` | Round-trip self test (`lcd-selftest`). |
@@ -278,3 +288,38 @@ payloads, so there is no simple framebuffer to decode.
 
 The wire protocols are reproduced byte-for-byte from the Python sources; each
 driver file states which Python file it was ported from.
+
+---
+
+## 8. Theme layer and daemon
+
+The drawing primitives live in `draw.hpp` and drive a **`DrawSurface`**. Two
+implementations exist:
+
+- `LcdComm` — forwards each crop to the transport (the real screen);
+- `OffscreenCanvas` — pastes into an RGB framebuffer (PNG preview, tests, the
+  Qt editor).
+
+```mermaid
+flowchart TD
+    T[Theme.yml] --> R[ThemeRenderer]
+    M[Metrics] --> R
+    R --> D["drawText / drawProgressBar / drawLineGraph / drawRadialProgressBar"]
+    D --> S{DrawSurface}
+    S -->|LcdComm| USB[USB transport]
+    S -->|OffscreenCanvas| PNG[Image / PNG / QImage]
+```
+
+`ThemeRenderer::drawItem()` recomputes the formatted value, compares it with the
+previous string and returns `false` when nothing changed, so the daemon never
+re-sends identical pixels. Line graphs keep a bounded history (`HISTORY_SIZE`,
+NaN-initialised like the Python project) and always repaint.
+
+`MonitorEngine` is the scheduler: a `steady_clock` deadline per item, one
+sensor sample when at least one item is due (throttled to 200 ms), and a single
+thread owning the `DrawSurface` — `LcdComm` calls are synchronous, so there is no
+queue and no display mutex.
+
+The same renderer is the editor's preview: **what you see in the editor is the
+image that is transmitted**, because both go through `DrawSurface` and the same
+primitives.

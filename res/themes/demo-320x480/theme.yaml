@@ -1,0 +1,217 @@
+---
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Demo theme bundled with USB-monitor-controller.
+# Layout for the 320x480 screens (revision A: Turing 3.5", UsbPCMonitor 3.5").
+# Use it as a starting point for your own theme, or edit it with lcd-theme-editor.
+author: "USB-monitor-controller"
+
+display:
+  DISPLAY_SIZE: "3.5"
+  DISPLAY_ORIENTATION: portrait
+
+static_images:
+  BACKGROUND:
+    PATH: background.png
+    X: 0
+    Y: 0
+    WIDTH: 320
+    HEIGHT: 480
+
+static_text:
+  CPU_LABEL:
+    TEXT: "CPU"
+    X: 104
+    Y: 18
+    FONT_SIZE: 16
+    FONT_COLOR: 97, 190, 255
+    BACKGROUND_IMAGE: background.png
+  GPU_LABEL:
+    TEXT: "GPU"
+    X: 104
+    Y: 134
+    FONT_SIZE: 16
+    FONT_COLOR: 120, 220, 150
+    BACKGROUND_IMAGE: background.png
+  RAM_LABEL:
+    TEXT: "MEMORY"
+    X: 104
+    Y: 250
+    FONT_SIZE: 16
+    FONT_COLOR: 255, 190, 90
+    BACKGROUND_IMAGE: background.png
+  DISK_LABEL:
+    TEXT: "DISK"
+    X: 116
+    Y: 366
+    FONT_SIZE: 16
+    FONT_COLOR: 200, 150, 255
+    BACKGROUND_IMAGE: background.png
+
+STATS:
+  CPU:
+    PERCENTAGE:
+      INTERVAL: 1
+      TEXT:
+        SHOW: True
+        SHOW_UNIT: False
+        X: 230
+        Y: 16
+        ANCHOR: rt
+        FONT_SIZE: 30
+        FONT_COLOR: 236, 240, 248
+        BACKGROUND_IMAGE: background.png
+      GRAPH:
+        SHOW: True
+        X: 104
+        Y: 44
+        WIDTH: 196
+        HEIGHT: 16
+        MIN_VALUE: 0
+        MAX_VALUE: 100
+        BAR_COLOR: 97, 190, 255
+        BAR_OUTLINE: False
+        BACKGROUND_COLOR: 30, 34, 44
+    FREQUENCY:
+      INTERVAL: 5
+      TEXT:
+        SHOW: True
+        SHOW_UNIT: True
+        X: 104
+        Y: 70
+        FONT_SIZE: 18
+        FONT_COLOR: 170, 182, 200
+        BACKGROUND_IMAGE: background.png
+    TEMPERATURE:
+      INTERVAL: 5
+      TEXT:
+        SHOW: True
+        SHOW_UNIT: True
+        X: 296
+        Y: 70
+        ANCHOR: rt
+        FONT_SIZE: 18
+        FONT_COLOR: 170, 182, 200
+        BACKGROUND_IMAGE: background.png
+
+  GPU:
+    INTERVAL: 1
+    PERCENTAGE:
+      TEXT:
+        SHOW: True
+        SHOW_UNIT: False
+        X: 230
+        Y: 132
+        ANCHOR: rt
+        FONT_SIZE: 30
+        FONT_COLOR: 236, 240, 248
+        BACKGROUND_IMAGE: background.png
+      GRAPH:
+        SHOW: True
+        X: 104
+        Y: 160
+        WIDTH: 196
+        HEIGHT: 16
+        MIN_VALUE: 0
+        MAX_VALUE: 100
+        BAR_COLOR: 120, 220, 150
+        BAR_OUTLINE: False
+        BACKGROUND_COLOR: 30, 34, 44
+    MEMORY:
+      TEXT:
+        SHOW: True
+        SHOW_UNIT: True
+        X: 104
+        Y: 186
+        FONT_SIZE: 18
+        FONT_COLOR: 170, 182, 200
+        BACKGROUND_IMAGE: background.png
+    TEMPERATURE:
+      TEXT:
+        SHOW: True
+        SHOW_UNIT: True
+        X: 296
+        Y: 186
+        ANCHOR: rt
+        FONT_SIZE: 18
+        FONT_COLOR: 170, 182, 200
+        BACKGROUND_IMAGE: background.png
+
+  MEMORY:
+    INTERVAL: 2
+    VIRTUAL:
+      PERCENT_TEXT:
+        SHOW: True
+        SHOW_UNIT: False
+        X: 230
+        Y: 248
+        ANCHOR: rt
+        FONT_SIZE: 30
+        FONT_COLOR: 236, 240, 248
+        BACKGROUND_IMAGE: background.png
+      GRAPH:
+        SHOW: True
+        X: 104
+        Y: 276
+        WIDTH: 196
+        HEIGHT: 16
+        MIN_VALUE: 0
+        MAX_VALUE: 100
+        BAR_COLOR: 255, 190, 90
+        BAR_OUTLINE: False
+        BACKGROUND_COLOR: 30, 34, 44
+
+  DISK:
+    INTERVAL: 10
+    USED:
+      PERCENT_TEXT:
+        SHOW: True
+        SHOW_UNIT: False
+        X: 230
+        Y: 364
+        ANCHOR: rt
+        FONT_SIZE: 30
+        FONT_COLOR: 236, 240, 248
+        BACKGROUND_IMAGE: background.png
+      GRAPH:
+        SHOW: True
+        X: 116
+        Y: 392
+        WIDTH: 184
+        HEIGHT: 16
+        MIN_VALUE: 0
+        MAX_VALUE: 100
+        BAR_COLOR: 200, 150, 255
+        BAR_OUTLINE: False
+        BACKGROUND_COLOR: 30, 34, 44
+    TOTAL:
+      TEXT:
+        SHOW: True
+        SHOW_UNIT: True
+        X: 116
+        Y: 418
+        FONT_SIZE: 18
+        FONT_COLOR: 170, 182, 200
+        BACKGROUND_IMAGE: background.png
+    FREE:
+      TEXT:
+        SHOW: True
+        SHOW_UNIT: True
+        X: 196
+        Y: 418
+        FONT_SIZE: 18
+        FONT_COLOR: 170, 182, 200
+        BACKGROUND_IMAGE: background.png
+
+  DATE:
+    INTERVAL: 1
+    HOUR:
+      TEXT:
+        SHOW: True
+        FORMAT: short
+        X: 160
+        Y: 452
+        ANCHOR: mm
+        FONT_SIZE: 16
+        FONT_COLOR: 140, 152, 172
+        BACKGROUND_IMAGE: background.png
