@@ -64,6 +64,10 @@ const char* kUsage =
     "  --revision <value>        A|B|C|D|TUR_USB|WEACT_A|WEACT_B|AUTO\n"
     "  --port <device>           Serial port (default: AUTO)\n"
     "  --brightness <0-100>      Override the configured brightness\n"
+    "  --orientation <value>     portrait|landscape|reverse-portrait|reverse-landscape\n"
+    "                            (or AUTO: follow the theme layout)\n"
+    "  --reverse                 Shorthand for a 180° rotation of the theme\n"
+    "  --force-orientation       Allow a 90°/270° rotation that changes the aspect\n"
     "  --tray                    Force the tray icon (default when available)\n"
     "  --headless                No tray icon (systemd / ssh)\n"
     "  --once, --dump-json       Refresh once, print metrics as JSON, exit\n"
@@ -100,7 +104,7 @@ struct Options {
 Options parseArgs(int argc, char** argv) {
     static const std::vector<std::string> flags = {
         "--tray", "--headless", "--once", "--dump-json", "--simulate",
-        "--verbose", "-v", "--help", "-h"};
+        "--reverse", "--force-orientation", "--verbose", "-v", "--help", "-h"};
     static const std::vector<std::string> valued = {
         "--config", "--theme", "--revision", "--port", "--brightness", "--frames",
         "--fps",    "--stub",  "--output",   "--width", "--height",   "--orientation",
@@ -135,6 +139,16 @@ Settings loadSettings(const Options& options) {
     }
     if (options.values.count("--root")) settings.themeRoot = options.get("--root");
     if (options.values.count("--fonts")) settings.fontsRoot = options.get("--fonts");
+    if (options.values.count("--orientation")) {
+        settings.displayOrientation = options.get("--orientation");
+    }
+    if (options.flag("--reverse")) {
+        settings.displayReverse = true;
+        settings.displayOrientation = "AUTO";
+    }
+    if (options.flag("--force-orientation")) {
+        settings.forceOrientation = true;
+    }
     return settings;
 }
 
@@ -154,14 +168,11 @@ std::string themeNameFor(const Options& options, const Settings& settings) {
 
 Theme loadThemeForDisplay(const Settings& settings, const std::string& name) {
     Theme theme = Theme::loadByName(name, settings.themeRoot, settings.fontsRoot);
-    if (settings.displayReverse) {
-        switch (theme.orientation) {
-            case Orientation::Portrait: theme.orientation = Orientation::ReversePortrait; break;
-            case Orientation::ReversePortrait: theme.orientation = Orientation::Portrait; break;
-            case Orientation::Landscape: theme.orientation = Orientation::ReverseLandscape; break;
-            case Orientation::ReverseLandscape: theme.orientation = Orientation::Landscape; break;
-        }
+    const OrientationDecision decision = resolveOrientation(settings, theme.orientation);
+    if (!decision.warning.empty()) {
+        LCDCTL_WARN << decision.warning;
     }
+    theme.orientation = decision.orientation;
     return theme;
 }
 
@@ -388,9 +399,10 @@ private:
     bool applyTheme(const std::string& name, QString* error) {
         try {
             Theme theme = loadThemeForDisplay(settings_, name);
+            themeOrientation_ = theme.orientation;
             if (!lcd_) {
                 lcd_ = openDevice(settings_, theme);
-            } else {
+            } else if (lcd_->orientation() != theme.orientation) {
                 lcd_->setOrientation(theme.orientation);
                 if (theme.hasBackplateLed) {
                     lcd_->setBackplateLedColor(theme.backplateLed);
@@ -427,6 +439,45 @@ private:
         for (int level : {20, 40, 60, 80, 100}) {
             auto* action = brightnessMenu->addAction(QString::number(level) + " %");
             connect(action, &QAction::triggered, this, [this, level] { setBrightness(level); });
+        }
+
+        // Which side of the panel is up. The theme fixes the layout aspect, so
+        // only the two rotations that keep it are offered here: a portrait theme
+        // can be flipped 180°, a landscape theme likewise.
+        auto* orientationMenu = menu->addMenu("Orientation");
+        orientationGroup_ = new QActionGroup(orientationMenu);
+        orientationGroup_->setExclusive(true);
+        struct RotationEntry {
+            Orientation orientation;
+            const char* label;
+            bool needsLandscape;
+        };
+        static const RotationEntry rotations[] = {
+            {Orientation::Portrait, "Portrait", false},
+            {Orientation::ReversePortrait, "Portrait (upside down)", false},
+            {Orientation::Landscape, "Landscape", true},
+            {Orientation::ReverseLandscape, "Landscape (upside down)", true},
+        };
+        for (const RotationEntry& entry : rotations) {
+            auto* action = orientationMenu->addAction(entry.label);
+            action->setCheckable(true);
+            action->setActionGroup(orientationGroup_);
+            orientationActions_.push_back({action, entry.orientation});
+            // Rotating by 90° changes the canvas size: only a theme drawn for
+            // that aspect can use it.
+            const bool compatible =
+                (entry.needsLandscape == !isPortraitOrientation(themeOrientation_));
+            if (!compatible) {
+                action->setToolTip("This theme is " +
+                                   QString::fromStdString(std::string(
+                                       isPortraitOrientation(themeOrientation_) ? "portrait"
+                                                                                : "landscape")) +
+                                   ": a 90° rotation would crop the layout");
+            }
+            connect(action, &QAction::triggered, this, [this, entry] {
+                applyOrientation(entry.orientation, !isPortraitOrientation(themeOrientation_) ==
+                                                        entry.needsLandscape);
+            });
         }
 
         auto* themeMenu = menu->addMenu("Theme");
@@ -479,6 +530,7 @@ private:
                     }
                 });
         tray_->show();
+        syncOrientationChecks();
     }
 
     void persistSettings() {
@@ -528,6 +580,44 @@ private:
                                    QSystemTrayIcon::Information);
             }
         });
+    }
+
+    void applyOrientation(Orientation orientation, bool compatible) {
+        if (!lcd_ || !engine_) {
+            return;
+        }
+        settings_.displayOrientation = orientationName(orientation);
+        settings_.displayReverse = false;
+        try {
+            lcd_->setOrientation(orientation);
+            engine_->invalidate();
+            engine_->redrawAll();
+        } catch (const std::exception& error) {
+            LCDCTL_WARN << "rotation failed: " << error.what();
+        }
+        persistSettings();
+        if (tray_) {
+            tray_->setToolTip(QString("USB Monitor Controller \u2014 %1 (%2)")
+                                  .arg(QString::fromStdString(currentTheme_))
+                                  .arg(orientationName(orientation)));
+            if (!compatible) {
+                tray_->showMessage("USB Monitor",
+                                   "This theme layout does not match the rotation: "
+                                   "the screen is cropped.",
+                                   QSystemTrayIcon::Warning);
+            }
+        }
+    }
+
+    void syncOrientationChecks() {
+        if (!lcd_) {
+            return;
+        }
+        for (auto& entry : orientationActions_) {
+            if (entry.first) {
+                entry.first->setChecked(entry.second == lcd_->orientation());
+            }
+        }
     }
 
     void setScreenEnabled(bool enabled) {
@@ -583,6 +673,9 @@ private:
     std::unique_ptr<MonitorEngine> engine_;
     std::string currentTheme_;
     bool reconnecting_ = false;
+    Orientation themeOrientation_ = Orientation::Portrait;
+    QActionGroup* orientationGroup_ = nullptr;
+    std::vector<std::pair<QAction*, Orientation>> orientationActions_;
     QSystemTrayIcon* tray_ = nullptr;
     QTimer* timer_ = nullptr;
 };

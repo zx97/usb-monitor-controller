@@ -30,6 +30,8 @@ flowchart LR
 make                                  # build everything (needs brew yaml-cpp)
 ./build/lcd-theme list                # themes found in build/res/themes
 ./build/lcd-theme preview demo-320x480 -o preview.png
+./build/lcd-theme preview 3.5inchTheme2 --rotate-output 180 -o mounted.png
+./build/lcd-theme preview 3.5inchTheme2 --orientation landscape   # warns: cropped
 ./build/lcd-monitor --once            # one sample, JSON on stdout
 ./build/lcd-monitor                   # tray icon (KDE), drives the screen
 ./build/lcd-monitor --headless        # no tray (systemd, ssh)
@@ -142,8 +144,15 @@ nothing per frame; `MonitorEngine::framePixels()` gives the worst-case cost, and
 - Transport errors → reopen after 3 s (revision A resets and may renumber
   `/dev/ttyACM0`), then redraw everything.
 - `--tray` (default when a display is available): KDE/XDG tray icon with screen
-  on/off, brightness, theme switch, **Edit theme…**, **Start at login**, Quit.
-  Clicking the icon opens the editor.
+  on/off, brightness, **Orientation**, theme switch, **Edit theme…**,
+  **Start at login**, Quit. Clicking the icon opens the editor.
+- **Orientation**: the theme fixes the layout aspect (portrait or landscape),
+  the user chooses which side of the panel is up. The tray offers the four
+  rotations; the 180° flip is native on rev A. A 90°/270° rotation changes the
+  canvas size and is refused (with a warning) unless `FORCE_ORIENTATION` is set
+  or `--force-orientation` is passed — it crops a theme drawn for the other
+  aspect. Persisted as `display.DISPLAY_ORIENTATION`
+  (`AUTO` = follow the theme; `DISPLAY_REVERSE: true` still flips 180°).
 - `Start at login` writes `~/.config/autostart/usb-monitor-controller.desktop`
   (`Exec=<binary> --tray`, `X-KDE-autostart-after=panel`).
 
@@ -166,6 +175,9 @@ sudo systemctl enable --now lcd-monitor
 - live preview rendered by the **same** `ThemeRenderer` as the daemon, so the
   pixels are the transmitted pixels;
 - drag an item on the canvas, or edit X/Y/WIDTH/HEIGHT/FONT_SIZE/ANCHOR/INTERVAL;
+- **Layout** switches the theme between portrait and landscape;
+  **Preview rotation** (0/90/180/270) turns the *preview only*, to check what the
+  eye sees when the panel is mounted that way;
 - `Save` writes `theme.yaml` and keeps `theme.yaml.bak`.
 
 Known limitation: `yaml-cpp` drops comments on save. The `.bak` file keeps the

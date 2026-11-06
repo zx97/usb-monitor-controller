@@ -199,9 +199,13 @@ tools/import-themes.py --size 480x800             # or --all, or --icons
 # One sample as JSON (sanity check of the sensors)
 ./build/lcd-monitor --once
 
-# Tray icon (KDE/XDG): screen on/off, brightness, theme picker,
+# Tray icon (KDE/XDG): screen on/off, brightness, orientation, theme picker,
 # "Edit theme...", "Start at login", Quit. Needs a session; otherwise headless.
 ./build/lcd-monitor
+
+# Mounted on another side? Rotate the panel (the theme keeps its aspect):
+./build/lcd-monitor --orientation reverse-portrait
+./build/lcd-monitor --orientation landscape --force-orientation   # 90° (crops a portrait theme)
 
 # No GUI: systemd, ssh, or a kiosk
 ./build/lcd-monitor --headless --theme 3.5inchTheme2 \
@@ -216,6 +220,27 @@ tools/import-themes.py --size 480x800             # or --all, or --icons
 See [`docs/THEMES.md`](docs/THEMES.md) for the supported YAML keys, the metric
 sources (`/proc`, `/sys/class/hwmon`, NVML), the refresh strategy and the
 systemd unit. `tools/systemd/lcd-monitor.service` is ready to install.
+
+### Orientation / rotation
+
+The theme defines the layout *aspect* (portrait or landscape). The panel itself
+can be mounted on any of its four sides, so the rotation is a display setting:
+
+- `Portrait` / `Portrait (upside down)` for a portrait theme,
+- `Landscape` / `Landscape (upside down)` for a landscape theme,
+
+available in the tray menu (**Orientation**), on the command line
+(`--orientation`, `--reverse`), and stored in `config.yaml`:
+
+```yaml
+display:
+  DISPLAY_ORIENTATION: reverse-portrait   # or AUTO (follow the theme)
+  FORCE_ORIENTATION: false                # allow a 90° rotation that crops the layout
+```
+
+Rev A takes a native rotation command, so a 180° flip costs nothing. A 90°/270°
+rotation changes the canvas size: it is refused with a warning unless
+`FORCE_ORIENTATION` is set, and it crops a theme drawn for the other aspect.
 
 ## Theme editor
 

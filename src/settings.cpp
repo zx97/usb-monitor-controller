@@ -161,7 +161,11 @@ Settings Settings::load(const std::string& path) {
         if (const YAML::Node display = root["display"]; display) {
             settings.revision = scalar(display["REVISION"], settings.revision);
             settings.brightness = asInt(display["BRIGHTNESS"], settings.brightness);
+            settings.displayOrientation =
+                scalar(display["DISPLAY_ORIENTATION"], settings.displayOrientation);
             settings.displayReverse = asBool(display["DISPLAY_REVERSE"], settings.displayReverse);
+            settings.forceOrientation =
+                asBool(display["FORCE_ORIENTATION"], settings.forceOrientation);
             settings.resetOnStartup = asBool(display["RESET_ON_STARTUP"], settings.resetOnStartup);
         }
         if (const YAML::Node app = root["app"]; app) {
@@ -215,6 +219,8 @@ void Settings::save(const std::string& path) const {
     YAML::Node display = root["display"];
     display["REVISION"] = revision;
     display["BRIGHTNESS"] = brightness;
+    display["DISPLAY_ORIENTATION"] = displayOrientation;
+    display["FORCE_ORIENTATION"] = forceOrientation;
     display["DISPLAY_REVERSE"] = displayReverse;
     display["RESET_ON_STARTUP"] = resetOnStartup;
 
@@ -233,6 +239,40 @@ void Settings::save(const std::string& path) const {
         throw std::runtime_error("cannot write " + target.string());
     }
     stream << YAML::Dump(root) << '\n';
+}
+
+OrientationDecision resolveOrientation(const Settings& settings,
+                                       Orientation themeOrientation) {
+    OrientationDecision decision;
+    decision.orientation = themeOrientation;
+
+    const std::string requested = settings.displayOrientation;
+    if (!requested.empty() && requested != "AUTO") {
+        Orientation parsed = themeOrientation;
+        if (parseOrientation(requested, parsed)) {
+            decision.orientation = parsed;
+        } else {
+            decision.warning = "unknown DISPLAY_ORIENTATION '" + requested +
+                               "', keeping " + orientationName(themeOrientation);
+        }
+    } else if (settings.displayReverse) {
+        decision.orientation = flippedOrientation(themeOrientation);
+    }
+
+    if (!sameAspect(decision.orientation, themeOrientation)) {
+        const std::string message =
+            std::string("orientation ") + orientationName(decision.orientation) +
+            " does not match this theme (" + orientationName(themeOrientation) +
+            " layout): the screen will be cropped";
+        if (settings.forceOrientation) {
+            decision.warning = message;
+        } else {
+            decision.warning = message + " — keeping " + orientationName(themeOrientation) +
+                               " (set FORCE_ORIENTATION to override)";
+            decision.orientation = themeOrientation;
+        }
+    }
+    return decision;
 }
 
 SensorSettings Settings::sensorSettings() const {

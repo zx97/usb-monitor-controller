@@ -30,7 +30,12 @@ struct Settings {
     // display:
     std::string revision = "AUTO";
     int brightness = 50;
-    bool displayReverse = false;
+    // Which side of the panel is up. "AUTO" follows the theme layout; a fixed
+    // value lets the user mount the screen on any of its four sides.
+    //   portrait | landscape | reverse-portrait | reverse-landscape
+    std::string displayOrientation = "AUTO";
+    bool displayReverse = false;        // upstream compatibility (flips 180°)
+    bool forceOrientation = false;      // apply even if it changes the aspect
     bool resetOnStartup = true;
 
     // app: (this project)
@@ -55,6 +60,17 @@ struct Settings {
     static bool autostartEnabled();
     static bool setAutostartEnabled(bool enabled, const std::string& command = "");
 };
+
+// Orientation actually sent to the panel. The theme fixes the layout aspect
+// (portrait/landscape); the 180° flip is always allowed, a 90°/270° rotation is
+// reported as a warning unless `Settings::forceOrientation` is set.
+struct OrientationDecision {
+    Orientation orientation = Orientation::Portrait;
+    std::string warning;   // empty when there is nothing to report
+};
+
+OrientationDecision resolveOrientation(const Settings& settings,
+                                       Orientation themeOrientation);
 
 // The config file used when --config is not given:
 // $LCDCTL_CONFIG, ./config.yaml, or ~/.config/usb-monitor-controller/config.yaml

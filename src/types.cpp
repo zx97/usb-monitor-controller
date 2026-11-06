@@ -84,6 +84,36 @@ bool parseOrientation(const std::string& text, Orientation& out) {
     return true;
 }
 
+bool isPortraitOrientation(Orientation orientation) {
+    return orientation == Orientation::Portrait || orientation == Orientation::ReversePortrait;
+}
+
+Orientation flippedOrientation(Orientation orientation) {
+    switch (orientation) {
+        case Orientation::Portrait:        return Orientation::ReversePortrait;
+        case Orientation::ReversePortrait: return Orientation::Portrait;
+        case Orientation::Landscape:       return Orientation::ReverseLandscape;
+        case Orientation::ReverseLandscape:return Orientation::Landscape;
+    }
+    return Orientation::Portrait;
+}
+
+bool sameAspect(Orientation a, Orientation b) {
+    return isPortraitOrientation(a) == isPortraitOrientation(b);
+}
+
+int orientationDegrees(Orientation orientation) {
+    // Value = which edge of the panel is up, starting from the natural portrait
+    // position; the framebuffer the panel receives is the logical one.
+    switch (orientation) {
+        case Orientation::Portrait:        return 0;
+        case Orientation::ReversePortrait: return 180;
+        case Orientation::Landscape:       return 90;
+        case Orientation::ReverseLandscape:return 270;
+    }
+    return 0;
+}
+
 Color parseColor(const std::string& text) {
     const std::string value = trim(text);
 

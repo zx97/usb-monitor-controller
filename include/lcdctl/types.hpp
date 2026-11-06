@@ -31,6 +31,17 @@ enum class Orientation {
 const char* orientationName(Orientation orientation);
 bool parseOrientation(const std::string& text, Orientation& out);
 
+// Screen rotations, exposed so the user can mount the panel on any of its four
+// sides. "Aspect" (portrait vs landscape) is fixed by the theme layout; the
+// 180° flip is always available, the 90°/270° rotations change the canvas size
+// and therefore only work with a theme drawn for that aspect.
+bool isPortraitOrientation(Orientation orientation);   // Portrait | ReversePortrait
+Orientation flippedOrientation(Orientation orientation);  // 180°
+bool sameAspect(Orientation a, Orientation b);
+
+// Clockwise rotation, in degrees, that the panel applies for this orientation.
+int orientationDegrees(Orientation orientation);
+
 struct Color {
     std::uint8_t r = 0;
     std::uint8_t g = 0;

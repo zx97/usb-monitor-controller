@@ -32,6 +32,7 @@
 #include <QStatusBar>
 #include <QTimer>
 #include <QToolBar>
+#include <QTransform>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -230,6 +231,9 @@ private:
     QListWidget* itemList_ = nullptr;
     QListWidget* textList_ = nullptr;
     QComboBox* themeCombo_ = nullptr;
+    QComboBox* orientationCombo_ = nullptr;
+    QComboBox* rotationCombo_ = nullptr;
+    bool loading_ = false;
     QGroupBox* properties_ = nullptr;
     QFormLayout* propertiesLayout_ = nullptr;
     QLabel* statusLabel_ = nullptr;
@@ -261,6 +265,35 @@ void ThemeEditor::buildUi() {
         if (!text.isEmpty()) {
             loadTheme(text.toStdString());
         }
+    });
+
+    // Theme orientation (layout aspect). The physical rotation applied to the
+    // panel is chosen in lcd-monitor or with `lcd-theme preview --orientation`.
+    orientationCombo_ = new QComboBox(this);
+    orientationCombo_->addItem("Portrait", 0);
+    orientationCombo_->addItem("Landscape", 2);
+    toolbar->addWidget(new QLabel("  Layout: ", this));
+    toolbar->addWidget(orientationCombo_);
+    connect(orientationCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (loading_ || index < 0) {
+            return;
+        }
+        theme_.orientation =
+            static_cast<lcdctl::Orientation>(orientationCombo_->itemData(index).toInt());
+        refreshPreview();
+        statusLabel_->setText("Modified (unsaved)");
+    });
+
+    // Preview rotation only: shows what the eye sees when the screen is mounted
+    // on another side. Does not change the theme.
+    rotationCombo_ = new QComboBox(this);
+    for (int degrees : {0, 90, 180, 270}) {
+        rotationCombo_->addItem(QString("%1\u00b0").arg(degrees), degrees);
+    }
+    toolbar->addWidget(new QLabel("  Preview rotation: ", this));
+    toolbar->addWidget(rotationCombo_);
+    connect(rotationCombo_, &QComboBox::currentIndexChanged, this, [this](int) {
+        refreshPreview();
     });
 
     auto* reloadAction = toolbar->addAction("Reload");
@@ -349,6 +382,10 @@ bool ThemeEditor::loadTheme(const std::string& name, bool keepSelection) {
         selectedKey_.reset();
         selectedText_.clear();
     }
+    loading_ = true;
+    orientationCombo_->setCurrentIndex(
+        lcdctl::isPortraitOrientation(theme_.orientation) ? 0 : 1);
+    loading_ = false;
     preview_->setItems(&theme_.items);
 
     // Deterministic values so the preview is stable while editing.
@@ -377,7 +414,12 @@ void ThemeEditor::refreshPreview() {
     lcdctl::ThemeRenderer renderer(theme_, canvas);
     renderer.drawBackground();
     renderer.drawAll(metrics_);
-    preview_->setRender(toQImage(canvas.framebuffer()));
+    QImage image = toQImage(canvas.framebuffer());
+    const int degrees = rotationCombo_ ? rotationCombo_->currentData().toInt() : 0;
+    if (degrees == 90 || degrees == 180 || degrees == 270) {
+        image = image.transformed(QTransform().rotate(degrees));
+    }
+    preview_->setRender(image);
     if (selectedKey_) {
         preview_->setSelection(QString::fromStdString(*selectedKey_));
     }

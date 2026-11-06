@@ -199,8 +199,11 @@ void testYamlRoundTrip(const std::string& root, const std::string& fonts) {
             std::fclose(file);
         }
     }
+    check(yaml.find("DISPLAY_ORIENTATION") != std::string::npos,
+          "serialized YAML keeps the orientation");
     const lcdctl::Theme reloaded =
         lcdctl::Theme::load("/dev/shm/lcdctl-theme-test/roundtrip", fonts);
+    check(reloaded.orientation == original.orientation, "round-trip keeps the orientation");
     check(reloaded.items.size() == original.items.size(), "round-trip keeps every item");
     for (const lcdctl::ThemeItem& item : original.items) {
         const lcdctl::ThemeItem* copy = reloaded.findItem(item.key);
@@ -209,6 +212,49 @@ void testYamlRoundTrip(const std::string& root, const std::string& fonts) {
             check(false, "round-trip keeps item " + item.key);
         }
     }
+}
+
+// Rotation: the theme fixes the aspect, the user picks which side is up.
+void testOrientation() {
+    using lcdctl::Orientation;
+    check(lcdctl::isPortraitOrientation(Orientation::Portrait), "portrait is portrait");
+    check(lcdctl::isPortraitOrientation(Orientation::ReversePortrait), "reverse-portrait is portrait");
+    check(!lcdctl::isPortraitOrientation(Orientation::Landscape), "landscape is not portrait");
+    check(lcdctl::flippedOrientation(Orientation::Portrait) == Orientation::ReversePortrait,
+          "portrait flips to reverse-portrait");
+    check(lcdctl::flippedOrientation(Orientation::ReverseLandscape) == Orientation::Landscape,
+          "reverse-landscape flips to landscape");
+    check(lcdctl::sameAspect(Orientation::Landscape, Orientation::ReverseLandscape),
+          "landscape and reverse-landscape share an aspect");
+    check(!lcdctl::sameAspect(Orientation::Portrait, Orientation::Landscape),
+          "portrait and landscape do not");
+
+    lcdctl::Settings settings;
+    lcdctl::OrientationDecision decision =
+        lcdctl::resolveOrientation(settings, Orientation::Portrait);
+    check(decision.orientation == Orientation::Portrait, "AUTO follows the theme");
+    check(decision.warning.empty(), "AUTO does not warn");
+
+    settings.displayOrientation = "reverse-portrait";
+    decision = lcdctl::resolveOrientation(settings, Orientation::Portrait);
+    check(decision.orientation == Orientation::ReversePortrait, "180° flip accepted for a portrait theme");
+    check(decision.warning.empty(), "180° flip does not warn");
+
+    settings.displayOrientation = "landscape";
+    decision = lcdctl::resolveOrientation(settings, Orientation::Portrait);
+    check(decision.orientation == Orientation::Portrait, "90° refused for a portrait theme");
+    check(!decision.warning.empty(), "90° mismatch is reported");
+
+    settings.forceOrientation = true;
+    decision = lcdctl::resolveOrientation(settings, Orientation::Portrait);
+    check(decision.orientation == Orientation::Landscape, "FORCE allows the 90° rotation");
+    check(!decision.warning.empty(), "forced 90° still warns about cropping");
+
+    settings.displayOrientation = "AUTO";
+    settings.displayReverse = true;
+    decision = lcdctl::resolveOrientation(settings, Orientation::Landscape);
+    check(decision.orientation == Orientation::ReverseLandscape,
+          "DISPLAY_REVERSE flips a landscape theme");
 }
 
 // "Start at login": an XDG autostart entry in ~/.config/autostart.
@@ -294,6 +340,7 @@ int main() {
     testRendering(root, fonts);
     testTextGhosting(fonts);
     testYamlRoundTrip(root, fonts);
+    testOrientation();
     testAutostart();
     renderEveryTheme(root, fonts, "bundled");
     testAllThemes();

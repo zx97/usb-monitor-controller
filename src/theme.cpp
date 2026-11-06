@@ -859,6 +859,19 @@ std::string Theme::toYaml() const {
         root["author"] = author;
     }
 
+    {
+        YAML::Node display = descend(root, "display");
+        display["DISPLAY_ORIENTATION"] = orientationName(orientation);
+        if (!displaySize.empty()) {
+            display["DISPLAY_SIZE"] = displaySize;
+        }
+        if (hasBackplateLed) {
+            display["DISPLAY_RGB_LED"] = std::to_string(backplateLed.r) + ", " +
+                                         std::to_string(backplateLed.g) + ", " +
+                                         std::to_string(backplateLed.b);
+        }
+    }
+
     for (const ThemeImage& image : images) {
         YAML::Node node = descend(root, "static_images/" + image.name);
         node["X"] = image.x;

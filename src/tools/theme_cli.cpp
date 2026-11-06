@@ -42,6 +42,9 @@ const char* kUsage =
     "  --config <file>               Read paths from a config.yaml\n"
     "  --width <px> --height <px>    Screen size (default: theme background size)\n"
     "  --orientation <value>         portrait|landscape|reverse-portrait|reverse-landscape\n"
+    "                                (preview the layout for that mounting; a 90°\n"
+    "                                 rotation crops a theme drawn for the other aspect)\n"
+    "  --rotate-output <degrees>     0|90|180|270: rotate the PNG to see what the eye sees\n"
     "  --stub <spec>                 Sensor values: static | random | static:cpu=42,gpu=12\n"
     "  --output <file.png>, -o       Preview output (default: theme-preview.png)\n"
     "  --json                        Machine-readable list output\n"
@@ -79,7 +82,8 @@ Options parseArgs(int argc, char** argv) {
         }
         const bool known = token == "--root" || token == "--fonts" || token == "--config" ||
                            token == "--width" || token == "--height" || token == "--orientation" ||
-                           token == "--stub" || token == "--output" || token == "--size";
+                           token == "--rotate-output" || token == "--stub" ||
+                           token == "--output" || token == "--size";
         if (known) {
             if (i + 1 >= argc) {
                 throw std::invalid_argument("missing value for " + token);
@@ -111,6 +115,24 @@ std::string resolveDirectory(const std::string& nameOrDir, const std::string& ro
     return candidate.string();
 }
 
+lcdctl::Orientation requestedOrientation(const Options& options, const lcdctl::Theme& theme) {
+    const std::string value = options.get("--orientation", "");
+    if (value.empty()) {
+        return theme.orientation;
+    }
+    lcdctl::Orientation orientation = theme.orientation;
+    if (!lcdctl::parseOrientation(value, orientation)) {
+        throw std::invalid_argument("unknown orientation: " + value);
+    }
+    if (!lcdctl::sameAspect(orientation, theme.orientation)) {
+        std::fprintf(stderr,
+                     "warning: %s does not match this theme's %s layout; the drawing is cropped\n",
+                     lcdctl::orientationName(orientation),
+                     lcdctl::orientationName(theme.orientation));
+    }
+    return orientation;
+}
+
 lcdctl::Size screenSize(const Options& options, const lcdctl::Theme& theme) {
     lcdctl::Size size{options.getInt("--width", 0), options.getInt("--height", 0)};
     const lcdctl::Size declared = theme.declaredSize();
@@ -120,8 +142,7 @@ lcdctl::Size screenSize(const Options& options, const lcdctl::Theme& theme) {
     if (size.height <= 0) {
         size.height = declared.height > 0 ? declared.height : 480;
     }
-    if (theme.orientation == lcdctl::Orientation::Landscape ||
-        theme.orientation == lcdctl::Orientation::ReverseLandscape) {
+    if (!lcdctl::isPortraitOrientation(requestedOrientation(options, theme))) {
         std::swap(size.width, size.height);
     }
     return size;
@@ -253,12 +274,24 @@ int commandPreview(const Options& options, const lcdctl::Settings& settings,
     renderer.drawBackground();
     const int transmitted = renderer.drawAll(metrics);
 
-    const std::string output = options.get("--output", "theme-preview.png");
-    lcdctl::savePng(output, canvas.framebuffer());
+    // The PNG is the logical framebuffer; the panel applies the rotation. With
+    // --rotate-output the file is turned so it matches what the eye sees when the
+    // screen is mounted that way.
+    lcdctl::Image result = canvas.framebuffer();
+    const int degrees = options.getInt("--rotate-output", 0);
+    if (degrees == 90 || degrees == 180 || degrees == 270) {
+        result = result.rotate(degrees);
+    } else if (degrees != 0) {
+        throw std::invalid_argument("--rotate-output accepts 0, 90, 180 or 270");
+    }
 
-    std::printf("Rendered %s (%dx%d) with stub '%s': %d item(s), %d warning(s) -> %s\n",
-                theme.name.c_str(), size.width, size.height, stub.c_str(), transmitted,
-                static_cast<int>(theme.warnings.size()), output.c_str());
+    const std::string output = options.get("--output", "theme-preview.png");
+    lcdctl::savePng(output, result);
+
+    std::printf("Rendered %s (%dx%d, %s) with stub '%s': %d item(s), %d warning(s) -> %s\n",
+                theme.name.c_str(), size.width, size.height,
+                lcdctl::orientationName(requestedOrientation(options, theme)), stub.c_str(),
+                transmitted, static_cast<int>(theme.warnings.size()), output.c_str());
     for (const std::string& warning : theme.warnings) {
         std::printf("  warning: %s\n", warning.c_str());
     }
