@@ -187,9 +187,13 @@ estimate when it starts).
 ## System monitor (themes, sensors, tray)
 
 `lcd-monitor` turns the screen into a system monitor using the **unchanged**
-`theme.yaml` format of the Python project. A bundled 320x480 theme is included;
-point `--root` at a `turing-smart-screen-python` checkout to use any of the 73
-upstream themes.
+`theme.yaml` format of the Python project. **32 themes are bundled** (the 31
+upstream themes designed for 320x480 plus a demo theme): `./build/lcd-theme list`.
+Other resolutions are one command away:
+
+```sh
+tools/import-themes.py --size 480x800             # or --all, or --icons
+```
 
 ```sh
 # One sample as JSON (sanity check of the sensors)

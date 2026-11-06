@@ -235,18 +235,10 @@ void testAutostart() {
     check(!lcdctl::Settings::autostartEnabled(), "autostart is off again");
 }
 
-// Optional: render every theme of a compatibility checkout
-// (LCDCTL_TEST_THEMES=/path/to/turing-smart-screen-python/res/themes).
-void testAllThemes() {
-    const char* root = std::getenv("LCDCTL_TEST_THEMES");
-    if (!root) {
-        return;
-    }
-    const char* fonts = std::getenv("LCDCTL_TEST_FONTS");
-    const std::string fontsDir = fonts ? fonts : "/home/linuxbrew/.linuxbrew/share/fonts";
+// Render every theme of a directory: the bundled collection, or a
+// turing-smart-screen-python checkout when LCDCTL_TEST_THEMES is set.
+int renderEveryTheme(const std::string& root, const std::string& fonts, const char* label) {
     const std::vector<lcdctl::ThemeInfo> themes = lcdctl::listThemes(root);
-    check(!themes.empty(), "compatibility theme root lists themes");
-
     lcdctl::SensorSettings sensorSettings;
     auto sensors = lcdctl::makeStaticSensors(sensorSettings);
     lcdctl::Metrics metrics;
@@ -255,7 +247,7 @@ void testAllThemes() {
     int rendered = 0;
     for (const lcdctl::ThemeInfo& info : themes) {
         try {
-            const lcdctl::Theme theme = lcdctl::Theme::load(info.directory, fontsDir);
+            const lcdctl::Theme theme = lcdctl::Theme::load(info.directory, fonts);
             lcdctl::Size size = theme.declaredSize();
             if (size.width <= 0 || size.height <= 0) {
                 size = {320, 480};
@@ -270,8 +262,20 @@ void testAllThemes() {
             ++g_failures;
         }
     }
-    std::printf("rendered %d/%d compatibility themes\n", rendered, static_cast<int>(themes.size()));
-    check(rendered == static_cast<int>(themes.size()), "every compatibility theme renders");
+    std::printf("rendered %d/%d %s themes\n", rendered, static_cast<int>(themes.size()), label);
+    check(!themes.empty(), std::string("theme collection is not empty: ") + label);
+    check(rendered == static_cast<int>(themes.size()),
+          std::string("every theme renders: ") + label);
+    return rendered;
+}
+
+// Optional: render every theme of a compatibility checkout
+// (LCDCTL_TEST_THEMES=/path/to/turing-smart-screen-python/res/themes).
+void testAllThemes() {
+    if (const char* root = std::getenv("LCDCTL_TEST_THEMES")) {
+        const char* fonts = std::getenv("LCDCTL_TEST_FONTS");
+        renderEveryTheme(root, fonts ? fonts : "", "compatibility");
+    }
 }
 
 }  // namespace
@@ -291,6 +295,7 @@ int main() {
     testTextGhosting(fonts);
     testYamlRoundTrip(root, fonts);
     testAutostart();
+    renderEveryTheme(root, fonts, "bundled");
     testAllThemes();
 
     std::printf("%d checks, %d failure(s)\n", g_checks, g_failures);

@@ -282,6 +282,17 @@ bool Settings::setAutostartEnabled(bool enabled, const std::string& command) {
         }
     }
 
+    // Use the bundled monitor icon when it is available (absolute path is
+    // required for XDG entries outside the icon theme).
+    std::string icon = "video-display";
+    const std::string root = resourceRoot();
+    if (!root.empty()) {
+        const std::string candidate = root + "/res/icons/monitor-icon-17865/64.png";
+        if (std::filesystem::exists(candidate, ec)) {
+            icon = candidate;
+        }
+    }
+
     std::ofstream stream(path);
     if (!stream) {
         return false;
@@ -291,7 +302,7 @@ bool Settings::setAutostartEnabled(bool enabled, const std::string& command) {
            << "Name=USB Monitor Controller\n"
            << "Comment=System monitor on a USB LCD screen\n"
            << "Exec=" << executable << " --tray\n"
-           << "Icon=video-display\n"
+           << "Icon=" << icon << "\n"
            << "Terminal=false\n"
            << "X-KDE-autostart-after=panel\n"
            << "X-GNOME-Autostart-enabled=true\n"

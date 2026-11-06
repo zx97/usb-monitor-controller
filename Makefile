@@ -10,7 +10,8 @@
 #   make monitor    run the system-monitor daemon (tray icon when available)
 #   make themes     list the themes available to the daemon
 #   make preview    render the demo theme to theme-preview.png
-#   make editor     open the Qt6 theme editor on the demo theme
+#   make editor     open the Qt6 theme editor
+#   make import-themes  copy upstream themes/fonts (see res/themes/README.md) on the demo theme
 #   make static     build a distributable binary with static dependencies
 #   make clean      remove build directories
 #
@@ -32,7 +33,7 @@ CMAKE_FLAGS ?=
 JOBS        ?= $(shell nproc 2>/dev/null || echo 4)
 
 .PHONY: all build help test list probe sim static static-clean clean distclean \
-        monitor monitor-headless themes preview editor
+        monitor monitor-headless themes preview editor import-themes
 
 all: build
 
@@ -48,6 +49,7 @@ help:
 	@echo "  make themes     list the themes available"
 	@echo "  make preview    render the demo theme -> theme-preview.png"
 	@echo "  make editor     open the Qt6 theme editor"
+	@echo "  make import-themes  copy upstream themes + fonts (IMPORT_ARGS=...)"
 	@echo "  make static     build a distributable, statically-linked binary"
 	@echo "  make static-clean  rebuild it from scratch (recompiles dependencies)"
 	@echo "  make clean      remove build/ and build-static/"
@@ -91,6 +93,9 @@ themes: build
 preview: build
 	./$(BUILD_DIR)/lcd-theme preview demo-320x480 -o theme-preview.png
 	@echo "Rendered theme-preview.png"
+
+import-themes:
+	python3 tools/import-themes.py $(IMPORT_ARGS)
 
 editor: build
 	./$(BUILD_DIR)/lcd-theme-editor "$(BUILD_DIR)/res/themes" "$(BUILD_DIR)/res/fonts" demo-320x480

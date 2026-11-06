@@ -36,9 +36,11 @@ make                                  # build everything (needs brew yaml-cpp)
 ./build/lcd-theme-editor build/res/themes build/res/fonts demo-320x480
 ```
 
-`res/themes/demo-320x480` is bundled and is a good starting point. To reuse the
-complete upstream collection (73 themes, 850 MB of backgrounds), point the tools
-at a checkout:
+**32 themes are bundled** (`res/themes/`): the 31 upstream themes whose
+background is 320x480 — the resolution of the validated hardware — plus
+`demo-320x480` written for this project. Import other resolutions with
+`tools/import-themes.py` (see `res/themes/README.md`). To reuse the complete
+upstream collection without copying anything, point the tools at a checkout:
 
 ```sh
 ./build/lcd-theme list  --root ~/src/turing-smart-screen-python/res/themes \
@@ -169,7 +171,25 @@ sudo systemctl enable --now lcd-monitor
 Known limitation: `yaml-cpp` drops comments on save. The `.bak` file keeps the
 previous version, and `git diff` shows the structural change.
 
-## 7. Tests
+## 7. Importing images (themes, fonts, icons)
+
+`tools/import-themes.py` copies themes, the font families they use and (on
+request) `res/icons/` from a `turing-smart-screen-python` checkout:
+
+```sh
+tools/import-themes.py --dry-run                  # what 320x480 would copy
+tools/import-themes.py                            # bundled set (default)
+tools/import-themes.py --size 480x800 --size 800x480
+tools/import-themes.py --all --icons              # everything (~75 MB)
+tools/import-themes.py --fonts none               # keep using an external font root
+```
+
+Only `.ttf`/`.otf` + licence files are copied for fonts (the upstream preview
+PNGs are unused), and `res/themes/demo-320x480` is never overwritten. The
+bundled `res/icons/monitor-icon-17865/64.png` is used as the tray icon and as
+the `Icon=` of the autostart entry.
+
+## 8. Tests
 
 ```sh
 make test                                             # ctest: 2 suites

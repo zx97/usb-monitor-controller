@@ -37,6 +37,7 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
+#include <QFileInfo>
 #include <QIcon>
 #include <QMenu>
 #include <QPainter>
@@ -328,6 +329,15 @@ int runHeadless(const Options& options, const Settings& settings) {
 #ifdef LCDCTL_WITH_QT
 
 QIcon makeTrayIcon(int size = 64) {
+    // Prefer the icon shipped with the project (res/icons/, imported from
+    // turing-smart-screen-python); fall back to a drawn one when it is absent.
+    const std::string root = resourceRoot();
+    if (!root.empty()) {
+        const QString path = QString::fromStdString(root + "/res/icons/monitor-icon-17865/64.png");
+        if (QFileInfo::exists(path)) {
+            return QIcon(path);
+        }
+    }
     QPixmap pixmap(size, size);
     pixmap.fill(Qt::transparent);
     QPainter painter(&pixmap);
