@@ -8,7 +8,7 @@ import os
 import sys
 import threading
 
-upstream = os.environ.get("UPSTREAM", "/home/user/src/turing-smart-screen-python")
+upstream = os.environ.get("UPSTREAM", os.path.expanduser("~/src/turing-smart-screen-python"))
 sys.path.insert(0, upstream)
 
 from PIL import Image

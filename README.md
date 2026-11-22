@@ -10,8 +10,9 @@ interface (`/dev/ttyACM*`, `COMx`) or their **native USB vendor interface**
 / theme / sensor stack.
 
 > This project is a C++ port of the LCD subsystem of
-> `turing-smart-screen-python`. It contains **no Python** at runtime and keeps
-> the wire protocols byte-for-byte identical.
+> `turing-smart-screen-python`, written by **Matthieu Houdebine (mathoudebine)**
+> and its contributors. It contains **no Python** at runtime and keeps the wire
+> protocols byte-for-byte identical. See [Credits and license](#credits-and-license).
 
 ---
 
@@ -314,8 +315,24 @@ make test
 tests/protocol_parity/run.sh A
 ```
 
-## License
+## Credits and license
 
-GPL-3.0-or-later. This is a derived work: the protocols and logic are ported
-from `turing-smart-screen-python`
-(Copyright © 2021 Matthieu Houdebine and contributors). See [`LICENSE`](LICENSE).
+This is a **derived work**: the wire protocols, the theme format and most of the
+drawing logic come from
+[**turing-smart-screen-python**](https://github.com/mathoudebine/turing-smart-screen-python),
+originally written by **Matthieu Houdebine** (mathoudebine) with contributions
+from Rollbacke, Ebag333, w1ld3r, gerph, Russ Nelson, Charles Ferguson and many
+others. Without that project this port would not exist.
+
+The bundled themes (`res/themes/`) are the upstream themes, unmodified, each one
+crediting its author in its `theme.yaml`; the bundled fonts (`res/fonts/`) ship
+with their own licences (Apache-2.0, SIL OFL 1.1). See
+[`res/themes/README.md`](res/themes/README.md) and
+[`res/fonts/README.md`](res/fonts/README.md).
+
+Everything is distributed under **GPL-3.0-or-later**, like the original:
+
+- `LICENSE` — GNU GPL v3 full text;
+- `AUTHORS.md` — upstream authors, contributors and the port;
+- each source file starts with an SPDX identifier and the attribution of the
+  Python file it was ported from.

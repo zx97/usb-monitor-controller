@@ -53,8 +53,8 @@ or set it once in `config.yaml`:
 
 ```yaml
 app:
-  THEME_ROOT: /home/user/src/turing-smart-screen-python/res/themes
-  FONTS_DIR:  /home/user/src/turing-smart-screen-python/res/fonts
+  THEME_ROOT: ~/src/turing-smart-screen-python/res/themes
+  FONTS_DIR:  ~/src/turing-smart-screen-python/res/fonts
 ```
 
 Environment variables `LCDCTL_THEME_ROOT` / `LCDCTL_FONTS_DIR` /

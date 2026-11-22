@@ -13,7 +13,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-UPSTREAM="${UPSTREAM:-/home/user/src/turing-smart-screen-python}"
+UPSTREAM="${UPSTREAM:-$HOME/src/turing-smart-screen-python}"
 REVISION="${1:-A}"
 
 if [ "$REVISION" != "A" ]; then
