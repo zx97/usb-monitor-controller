@@ -205,8 +205,8 @@ tools/import-themes.py --size 480x800             # or --all, or --icons
 # One sample as JSON (sanity check of the sensors)
 ./build/lcd-monitor --once
 
-# Tray icon (KDE/XDG): screen on/off, brightness, orientation, theme picker,
-# "Edit theme...", "Start at login", Quit. Needs a session; otherwise headless.
+# Tray icon (KDE/XDG/Windows): screen on/off, brightness, orientation, theme
+# picker, control window, "Edit theme...", "Start at login", Quit.
 ./build/lcd-monitor
 
 # Mounted on another side? Rotate the panel (the theme keeps its aspect):

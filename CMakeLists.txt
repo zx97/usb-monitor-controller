@@ -190,7 +190,15 @@ function(lcdctl_enable_qt target)
     set_target_properties(${target} PROPERTIES
         AUTOMOC ON
         POSITION_INDEPENDENT_CODE ON)
-    if(NOT WIN32)
+    if(WIN32)
+        # GUI subsystem: no console window when started from the Start menu.
+        # Qt6::EntryPoint supplies the WinMain shim that calls our main(), and
+        # main() attaches to the parent console for --once/--simulate/--headless.
+        set_target_properties(${target} PROPERTIES WIN32_EXECUTABLE ON)
+        if(TARGET Qt6::EntryPoint)
+            target_link_libraries(${target} PRIVATE Qt6::EntryPoint)
+        endif()
+    else()
         target_compile_options(${target} PRIVATE -fPIC -fno-pie)
         target_link_options(${target} PRIVATE -no-pie)
     endif()

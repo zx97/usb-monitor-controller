@@ -190,6 +190,7 @@ Settings Settings::load(const std::string& path) {
             settings.trayIcon = asBool(app["TRAY_ICON"], settings.trayIcon);
             settings.startAtLogin = asBool(app["START_AT_LOGIN"], settings.startAtLogin);
             settings.logFile = scalar(app["LOG_FILE"], settings.logFile);
+            settings.trayTipShown = asBool(app["TRAY_TIP_SHOWN"], settings.trayTipShown);
             if (const YAML::Node custom = app["CUSTOM_SENSORS"]; custom && custom.IsMap()) {
                 for (auto it = custom.begin(); it != custom.end(); ++it) {
                     settings.customSensors.emplace_back(scalar(it->first),
@@ -245,6 +246,7 @@ void Settings::save(const std::string& path) const {
     app["DISK_MOUNT"] = diskMount;
     app["TRAY_ICON"] = trayIcon;
     app["START_AT_LOGIN"] = startAtLogin;
+    app["TRAY_TIP_SHOWN"] = trayTipShown;
     if (!logFile.empty()) {
         app["LOG_FILE"] = logFile;
     }

@@ -61,6 +61,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "*-setup.exe"; Flags: igno
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--tray"; WorkingDir: "{app}"
+Name: "{group}\Control panel"; Filename: "{app}\{#AppExe}"; Parameters: "--window"; WorkingDir: "{app}"
 Name: "{group}\Theme editor"; Filename: "{app}\lcd-theme-editor.exe"; WorkingDir: "{app}"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--tray"; WorkingDir: "{app}"; Tasks: desktopicon

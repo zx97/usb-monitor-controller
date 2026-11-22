@@ -98,7 +98,33 @@ The installer is built for Windows 10+ (`MinVersion=10.0`), x64 only.
 The portable zip stays the reference artefact: it needs no installation and
 contains exactly the same files.
 
-## 4. Windows-specific behaviour
+## 4. User interface on Windows
+
+The daemon is a **GUI-subsystem** executable: no console window opens when it is
+started from the Start menu, the desktop shortcut or the *Startup* folder. When
+it *is* started from a terminal (`--once`, `--simulate`, `--headless`), it
+attaches to the parent console so the output stays visible; a redirected
+stdout/stderr (`> file`) is left untouched.
+
+Two ways to drive it with the mouse:
+
+- **Tray icon** — same menu as under KDE (Screen on/off, Brightness,
+  Orientation, Theme, Control panel, Edit theme, Start at login, Quit).
+  Windows keeps new notification icons in the **overflow area**: click the `^`
+  chevron next to the clock and drag the icon onto the taskbar to pin it. A
+  balloon says so on the first start (once; `app.TRAY_TIP_SHOWN` in the config).
+- **Control window** — the same controls in a plain window, reachable by
+  double-clicking the tray icon, from the tray menu (*Control panel…*), from the
+  Start menu entry **Control panel** (`lcd-monitor --window`), or automatically
+  when no tray icon can be created after 30 s.
+
+If the screen is not plugged in, the window still opens and reports
+`No screen: …` while retrying the connection every 5 s — plug the panel and it
+comes up. A second launch (Start menu, shortcut) does not start a second daemon:
+it asks the running instance to show its window (shared-memory guard), then
+exits.
+
+## 5. Windows-specific behaviour
 
 | Topic | Linux | Windows |
 |---|---|---|
@@ -120,18 +146,19 @@ For temperatures, install
 enable *Options → Remote Web Server → Run* (port 8085). This is the same
 provider the Python project uses on Windows.
 
-## 5. Known limitations
+## 6. Known limitations
 
 - No hardware validation of the serial link under Windows (the VM had no USB
   screen passthrough). `lcd-cli list` runs and returns nothing without a device.
-- The tray icon and the editor are Qt widgets: they were verified by rendering
-  offscreen (`--screenshot`) in the VM, not by clicking in a live session.
+- The tray icon and the control window are Qt widgets: they were verified by
+  rendering offscreen (`--screenshot`, `LCDCTL_WINDOW_SCREENSHOT`) in the VM,
+  not by clicking in a live session.
 - Temperatures and fan speeds require LibreHardwareMonitor; GPU metrics require
   an NVIDIA card (NVML).
 - Native USB (`TUR_USB`) uses libusb: it builds and links, but the WinUSB driver
   must be bound to the device with Zadig on a real machine.
 
-## 6. Cross-checking from Linux
+## 7. Cross-checking from Linux
 
 The Windows binary cannot be run here, but the protocol encoders are covered by
 `lcd-selftest`, which the Windows build runs too (14 checks, all passing in the

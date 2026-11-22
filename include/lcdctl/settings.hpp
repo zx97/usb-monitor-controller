@@ -43,7 +43,8 @@ struct Settings {
     std::string fontsRoot;              // res/fonts by default
     std::string diskMount;   // empty => the filesystem holding $HOME
     bool trayIcon = true;               // show the KDE tray icon
-    bool startAtLogin = false;          // write an XDG autostart entry
+    bool startAtLogin = false;          // write an XDG autostart entry / Run key
+    bool trayTipShown = false;          // the "where is the tray icon" hint was shown
     std::string logFile;
     std::vector<std::pair<std::string, std::string>> customSensors;  // name -> command
 

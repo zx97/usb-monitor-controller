@@ -37,15 +37,30 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
+#include <QCheckBox>
+#include <QComboBox>
 #include <QFileInfo>
+#include <QFormLayout>
+#include <QHBoxLayout>
 #include <QIcon>
+#include <QLabel>
 #include <QMenu>
 #include <QPainter>
 #include <QPixmap>
 #include <QProcess>
+#include <QPushButton>
+#include <QSharedMemory>
+#include <QSlider>
 #include <QStringList>
 #include <QSystemTrayIcon>
 #include <QTimer>
+#include <QVBoxLayout>
+#include <QWidget>
+#endif
+
+#if defined(_WIN32)
+#include <windows.h>
+#include <cstdio>
 #endif
 
 namespace {
@@ -68,8 +83,9 @@ const char* kUsage =
     "                            (or AUTO: follow the theme layout)\n"
     "  --reverse                 Shorthand for a 180° rotation of the theme\n"
     "  --force-orientation       Allow a 90°/270° rotation that changes the aspect\n"
-    "  --tray                    Force the tray icon (default when available)\n"
-    "  --headless                No tray icon (systemd / ssh)\n"
+    "  --tray                    Tray icon + control window (default on a desktop)\n"
+    "  --window                  Open the control window at startup\n"
+    "  --headless                No GUI at all (systemd / ssh)\n"
     "  --once, --dump-json       Refresh once, print metrics as JSON, exit\n"
     "  --simulate                Render to PNG instead of driving a screen\n"
     "  --frames <n>              Frames to render in --simulate (default 1)\n"
@@ -103,7 +119,7 @@ struct Options {
 
 Options parseArgs(int argc, char** argv) {
     static const std::vector<std::string> flags = {
-        "--tray", "--headless", "--once", "--dump-json", "--simulate",
+        "--tray", "--window", "--headless", "--once", "--dump-json", "--simulate",
         "--reverse", "--force-orientation", "--verbose", "-v", "--help", "-h"};
     static const std::vector<std::string> valued = {
         "--config", "--theme", "--revision", "--port", "--brightness", "--frames",
@@ -389,8 +405,10 @@ QIcon makeTrayIcon(int size = 64) {
 
 class MonitorApp : public QObject {
 public:
-    MonitorApp(const Settings& settings, const Options& options, std::string settingsPath)
-        : settings_(settings), options_(options), settingsPath_(std::move(settingsPath)) {}
+    MonitorApp(const Settings& settings, const Options& options, std::string settingsPath,
+               bool showWindow, QSharedMemory* instance)
+        : settings_(settings), options_(options), settingsPath_(std::move(settingsPath)),
+          showWindow_(showWindow), instance_(instance) {}
 
     ~MonitorApp() override {
         if (lcd_) {
@@ -403,15 +421,244 @@ public:
 
     bool start(QString* error) {
         const std::string themeName = themeNameFor(options_, settings_);
+        // A missing screen must not prevent the UI from starting: the user can
+        // plug the panel and retry. The window shows the error meanwhile.
         if (!applyTheme(themeName, error)) {
-            return false;
+            startupError_ = *error;
         }
-        buildTray();
+        setupUi();
+
+        if (!startupError_.isEmpty()) {
+            retryTimer_ = new QTimer(this);
+            connect(retryTimer_, &QTimer::timeout, this, [this, themeName] {
+                QString retryError;
+                if (!applyTheme(themeName, &retryError)) {
+                    startupError_ = retryError;
+                    syncControlWindow();
+                    return;
+                }
+                startupError_.clear();
+                retryTimer_->stop();
+                syncControlWindow();
+                if (tray_) {
+                    tray_->showMessage("USB Monitor", "Screen connected",
+                                       QSystemTrayIcon::Information);
+                }
+            });
+            retryTimer_->start(5000);
+        }
 
         timer_ = new QTimer(this);
         connect(timer_, &QTimer::timeout, this, [this] { onTick(); });
         timer_->start(50);
+
+        // A second launch sets a byte in shared memory: bring the window up.
+        if (instance_ != nullptr) {
+            auto* poll = new QTimer(this);
+            connect(poll, &QTimer::timeout, this, [this] {
+                if (instance_ == nullptr || !instance_->isAttached()) {
+                    return;
+                }
+                auto* bytes = static_cast<char*>(instance_->data());
+                if (bytes != nullptr && bytes[0] != 0) {
+                    bytes[0] = 0;
+                    showControlWindow();
+                }
+            });
+            poll->start(500);
+        }
         return true;
+    }
+
+    // Tray icon when the shell offers one, control window as a guaranteed way
+    // in (Windows hides new notification icons in the overflow area).
+    void setupUi() {
+        if (QSystemTrayIcon::isSystemTrayAvailable()) {
+            buildTray();
+            if (showWindow_) {
+                showControlWindow();
+            }
+            return;
+        }
+        if (showWindow_) {
+            showControlWindow();
+        }
+
+        // Debug/CI: render the control window to a PNG and exit. Works with
+        // QT_QPA_PLATFORM=offscreen, so the UI can be checked without a desktop.
+        if (const char* screenshot = std::getenv("LCDCTL_WINDOW_SCREENSHOT")) {
+            const QString path = QString::fromUtf8(screenshot);
+            QTimer::singleShot(800, window_, [this, path] {
+                if (window_ != nullptr) {
+                    window_->grab().save(path);
+                }
+                QApplication::quit();
+            });
+        }
+
+        trayRetry_ = new QTimer(this);
+        trayRetryCount_ = 0;
+        trayRetryCount_ = 0;
+        connect(trayRetry_, &QTimer::timeout, this, [this] {
+            if (QSystemTrayIcon::isSystemTrayAvailable()) {
+                trayRetry_->stop();
+                buildTray();
+                return;
+            }
+            if (++trayRetryCount_ >= 30) {
+                trayRetry_->stop();
+                // No tray after 30 s: the window is the only UI.
+                showControlWindow();
+            }
+        });
+        trayRetry_->start(1000);
+    }
+
+    void showControlWindow() {
+        if (window_ == nullptr) {
+            buildControlWindow();
+        }
+        window_->show();
+        window_->raise();
+        window_->activateWindow();
+        syncControlWindow();
+    }
+
+    // Plain window with the same controls as the tray menu: the guaranteed way
+    // to drive the monitor when the shell hides the notification icon.
+    void buildControlWindow() {
+        window_ = new QWidget();
+        window_->setWindowTitle("USB Monitor Controller");
+        window_->setWindowIcon(makeTrayIcon());
+        window_->setMinimumWidth(420);
+
+        auto* layout = new QVBoxLayout(window_);
+        windowStatus_ = new QLabel();
+        windowStatus_->setWordWrap(true);
+        layout->addWidget(windowStatus_);
+        auto* form = new QFormLayout();
+
+        windowScreen_ = new QCheckBox("Screen on");
+        windowScreen_->setChecked(engine_ == nullptr || !engine_->paused());
+        form->addRow(windowScreen_);
+        connect(windowScreen_, &QCheckBox::toggled, this, [this](bool on) { setScreenEnabled(on); });
+
+        windowBrightness_ = new QSlider(Qt::Horizontal);
+        windowBrightness_->setRange(0, 100);
+        windowBrightness_->setValue(settings_.brightness);
+        form->addRow("Brightness", windowBrightness_);
+        connect(windowBrightness_, &QSlider::valueChanged, this,
+                [this](int value) { setBrightness(value); });
+
+        windowOrientation_ = new QComboBox();
+        windowOrientation_->addItem("Portrait", static_cast<int>(Orientation::Portrait));
+        windowOrientation_->addItem("Portrait (upside down)",
+                                    static_cast<int>(Orientation::ReversePortrait));
+        windowOrientation_->addItem("Landscape", static_cast<int>(Orientation::Landscape));
+        windowOrientation_->addItem("Landscape (upside down)",
+                                    static_cast<int>(Orientation::ReverseLandscape));
+        form->addRow("Orientation", windowOrientation_);
+        connect(windowOrientation_, &QComboBox::currentIndexChanged, this, [this](int index) {
+            if (index < 0 || window_->signalsBlocked()) {
+                return;
+            }
+            const auto orientation =
+                static_cast<Orientation>(windowOrientation_->itemData(index).toInt());
+            applyOrientation(orientation, sameAspect(orientation, themeOrientation_));
+        });
+
+        windowTheme_ = new QComboBox();
+        for (const ThemeInfo& info : listThemes(settings_.themeRoot)) {
+            windowTheme_->addItem(QString::fromStdString(info.name));
+        }
+        form->addRow("Theme", windowTheme_);
+        connect(windowTheme_, &QComboBox::currentTextChanged, this, [this](const QString& name) {
+            if (window_->signalsBlocked() || name.isEmpty()) {
+                return;
+            }
+            QString error;
+            if (!applyTheme(name.toStdString(), &error)) {
+                if (tray_) {
+                    tray_->showMessage("USB Monitor", error, QSystemTrayIcon::Warning);
+                }
+                return;
+            }
+            settings_.themeName = name.toStdString();
+            persistSettings();
+            syncControlWindow();
+        });
+
+        windowAutostart_ = new QCheckBox("Start at login");
+        windowAutostart_->setChecked(Settings::autostartEnabled());
+        form->addRow(windowAutostart_);
+        connect(windowAutostart_, &QCheckBox::toggled, this, [this](bool on) {
+            Settings::setAutostartEnabled(on);
+            settings_.startAtLogin = on;
+            persistSettings();
+        });
+
+        layout->addLayout(form);
+
+        auto* buttons = new QHBoxLayout();
+        auto* edit = new QPushButton("Edit theme\u2026");
+        auto* quit = new QPushButton("Quit");
+        buttons->addWidget(edit);
+        buttons->addStretch();
+        buttons->addWidget(quit);
+        layout->addLayout(buttons);
+
+        connect(edit, &QPushButton::clicked, this, [this] { launchEditor(); });
+        connect(quit, &QPushButton::clicked, this, [] {
+            g_stop = true;
+            QApplication::quit();
+        });
+
+        syncControlWindow();
+    }
+
+    // Refresh the window widgets from the live device/settings state without
+    // re-entering the change handlers.
+    void syncControlWindow() {
+        if (window_ == nullptr) {
+            return;
+        }
+        const bool blocked = window_->blockSignals(true);
+        if (windowScreen_ != nullptr && engine_ != nullptr) {
+            windowScreen_->setChecked(!engine_->paused());
+        }
+        if (windowBrightness_ != nullptr) {
+            windowBrightness_->setValue(settings_.brightness);
+        }
+        if (windowOrientation_ != nullptr && lcd_ != nullptr) {
+            const int index =
+                windowOrientation_->findData(static_cast<int>(lcd_->orientation()));
+            if (index >= 0) {
+                windowOrientation_->setCurrentIndex(index);
+            }
+        }
+        if (windowTheme_ != nullptr && !currentTheme_.empty()) {
+            const int index = windowTheme_->findText(QString::fromStdString(currentTheme_));
+            if (index >= 0) {
+                windowTheme_->setCurrentIndex(index);
+            }
+        }
+        if (windowAutostart_ != nullptr) {
+            windowAutostart_->setChecked(Settings::autostartEnabled());
+        }
+        if (windowStatus_ != nullptr) {
+            if (!startupError_.isEmpty()) {
+                windowStatus_->setText("No screen: " + startupError_ +
+                                       "\n(plug the screen; retrying every 5 s)");
+                windowStatus_->setStyleSheet("color: #c0392b;");
+            } else if (lcd_ != nullptr) {
+                windowStatus_->setText(QString("Screen %1x%2 \u2014 theme %3")
+                                           .arg(lcd_->getWidth())
+                                           .arg(lcd_->getHeight())
+                                           .arg(QString::fromStdString(currentTheme_)));
+                windowStatus_->setStyleSheet("color: #2d7a3e;");
+            }
+        }
+        window_->blockSignals(blocked);
     }
 
 private:
@@ -521,6 +768,9 @@ private:
             });
         }
 
+        auto* windowAction = menu->addAction("Control panel\u2026");
+        connect(windowAction, &QAction::triggered, this, [this] { showControlWindow(); });
+
         auto* editAction = menu->addAction("Edit theme\u2026");
         connect(editAction, &QAction::triggered, this, [this] { launchEditor(); });
 
@@ -544,12 +794,26 @@ private:
         tray_->setContextMenu(menu);
         connect(tray_, &QSystemTrayIcon::activated, this,
                 [this](QSystemTrayIcon::ActivationReason reason) {
-                    if (reason == QSystemTrayIcon::Trigger) {
-                        launchEditor();
+                    if (reason == QSystemTrayIcon::Trigger ||
+                        reason == QSystemTrayIcon::DoubleClick) {
+                        showControlWindow();
                     }
                 });
         tray_->show();
         syncOrientationChecks();
+
+        // First run: explain where the icon went (Windows keeps new icons in
+        // the notification-area overflow until the user pins them).
+        if (!settings_.trayTipShown) {
+            tray_->showMessage(
+                "USB Monitor Controller",
+                "The icon is in the notification area: click the ^ chevron next to "
+                "the clock, then drag it onto the taskbar to keep it visible. "
+                "Double-click the icon to open the control panel.",
+                QSystemTrayIcon::Information, 10000);
+            settings_.trayTipShown = true;
+            persistSettings();
+        }
     }
 
     void persistSettings() {
@@ -697,13 +961,48 @@ private:
     std::vector<std::pair<QAction*, Orientation>> orientationActions_;
     QSystemTrayIcon* tray_ = nullptr;
     QTimer* timer_ = nullptr;
+    QWidget* window_ = nullptr;
+    QTimer* trayRetry_ = nullptr;
+    QTimer* retryTimer_ = nullptr;
+    int trayRetryCount_ = 0;
+    bool showWindow_ = false;
+    QString startupError_;
+    QLabel* windowStatus_ = nullptr;
+    QSharedMemory* instance_ = nullptr;
+    QCheckBox* windowScreen_ = nullptr;
+    QSlider* windowBrightness_ = nullptr;
+    QComboBox* windowOrientation_ = nullptr;
+    QComboBox* windowTheme_ = nullptr;
+    QCheckBox* windowAutostart_ = nullptr;
 };
 
 #endif  // LCDCTL_WITH_QT
 
 }  // namespace
 
+#if defined(_WIN32)
+// The GUI build is a "windows" subsystem executable: no console window appears.
+// When it is started from a terminal (--once, --simulate, --headless), lend it
+// the parent console so the output is visible.
+static void attachParentConsole() {
+    // A redirected stdout/stderr (pipe, file) is inherited as-is: keep it.
+    HANDLE out = ::GetStdHandle(STD_OUTPUT_HANDLE);
+    if (out != nullptr && out != INVALID_HANDLE_VALUE &&
+        ::GetFileType(out) != FILE_TYPE_UNKNOWN) {
+        return;
+    }
+    if (::AttachConsole(ATTACH_PARENT_PROCESS)) {
+        std::FILE* stream = nullptr;
+        freopen_s(&stream, "CONOUT$", "w", stdout);
+        freopen_s(&stream, "CONOUT$", "w", stderr);
+    }
+}
+#endif
+
 int main(int argc, char** argv) {
+#if defined(_WIN32)
+    attachParentConsole();
+#endif
     try {
         const Options options = parseArgs(argc, argv);
         if (options.flag("--help")) {
@@ -723,23 +1022,42 @@ int main(int argc, char** argv) {
         }
 
 #ifdef LCDCTL_WITH_QT
-        const bool displayAvailable = !qEnvironmentVariableIsEmpty("DISPLAY") ||
-                                      !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY");
+        // A desktop session exists on Windows/macOS by definition; on Linux it
+        // is announced through DISPLAY/WAYLAND_DISPLAY.
+        bool displayAvailable = true;
+#if !defined(_WIN32) && !defined(__APPLE__)
+        displayAvailable = !qEnvironmentVariableIsEmpty("DISPLAY") ||
+                           !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY");
+#endif
         if (!options.flag("--headless") && displayAvailable) {
             QApplication application(argc, argv);
             application.setApplicationName("lcd-monitor");
+            application.setWindowIcon(makeTrayIcon());
             application.setQuitOnLastWindowClosed(false);
-            if (QSystemTrayIcon::isSystemTrayAvailable()) {
-                MonitorApp monitor(settings, options,
-                                   options.get("--config", defaultConfigPath()));
-                QString error;
-                if (!monitor.start(&error)) {
-                    std::cerr << "Error: " << error.toStdString() << std::endl;
-                    return 1;
+
+            // One instance only: a second launch asks the running one to show
+            // its control window, then exits. Also protects the serial port.
+            QSharedMemory instance("usb-monitor-controller-instance");
+            if (!instance.create(16)) {
+                if (instance.attach()) {
+                    auto* bytes = static_cast<char*>(instance.data());
+                    if (bytes != nullptr) {
+                        bytes[0] = 1;   // "show yourself"
+                    }
+                    instance.detach();
                 }
-                return application.exec();
+                return 0;
             }
-            std::cerr << "No system tray available, switching to headless mode.\n";
+
+            MonitorApp monitor(settings, options,
+                               options.get("--config", defaultConfigPath()),
+                               options.flag("--window"), &instance);
+            QString error;
+            if (!monitor.start(&error)) {
+                std::cerr << "Error: " << error.toStdString() << std::endl;
+                return 1;
+            }
+            return application.exec();
         }
 #endif
         return runHeadless(options, settings);
