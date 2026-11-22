@@ -187,9 +187,7 @@ function(lcdctl_enable_qt target)
         target_link_directories(${target} BEFORE PRIVATE ${_qt_lib_dir})
         set_target_properties(${target} PROPERTIES BUILD_RPATH "${_qt_lib_dir}")
     endif()
-    set_target_properties(${target} PROPERTIES
-        AUTOMOC ON
-        POSITION_INDEPENDENT_CODE ON)
+    set_target_properties(${target} PROPERTIES AUTOMOC ON)
     if(WIN32)
         # GUI subsystem: no console window when started from the Start menu.
         # Qt6::EntryPoint supplies the WinMain shim that calls our main(), and
@@ -199,7 +197,12 @@ function(lcdctl_enable_qt target)
             target_link_libraries(${target} PRIVATE Qt6::EntryPoint)
         endif()
     else()
-        target_compile_options(${target} PRIVATE -fPIC -fno-pie)
+        # Qt is built with -reduce-relocations: the code must be compiled as PIC
+        # and must not be PIE. Disable CMake's PIE for the executable and pass
+        # -fPIC alone (a trailing -fno-pie would also clear __PIC__, which Qt
+        # rejects with the same error).
+        set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE OFF)
+        target_compile_options(${target} PRIVATE -fPIC)
         target_link_options(${target} PRIVATE -no-pie)
     endif()
 endfunction()
