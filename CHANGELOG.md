@@ -4,7 +4,7 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] — unreleased
+## [0.1.0] — 2026-11-22
 
 First public release: a C++17 port of the LCD subsystem of
 [turing-smart-screen-python](https://github.com/mathoudebine/turing-smart-screen-python)
