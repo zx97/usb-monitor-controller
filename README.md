@@ -96,7 +96,9 @@ troubleshooting) and [`docs/STATIC_BUILD.md`](docs/STATIC_BUILD.md) for the
 distributable static build.
 
 **Windows 10/11**: MSYS2 UCRT64 + Qt 6 — `tools/build-windows.sh` builds, tests
-and packages a portable `dist-win/` folder with every DLL. See
+and packages a portable `dist-win/` folder with every DLL, and
+`tools/build-windows-installer.sh` produces an Inno Setup installer
+(per-user, no admin rights, optional start-at-login). See
 [`docs/WINDOWS.md`](docs/WINDOWS.md).
 
 ## Usage

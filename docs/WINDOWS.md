@@ -63,7 +63,42 @@ cmake -S . -B build-win -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=
 cmake --build build-win -j 8
 ```
 
-## 3. Windows-specific behaviour
+## 3. Installer (for another PC)
+
+`dist-win/usb-monitor-controller-<version>-windows-x64-setup.exe` is an Inno
+Setup installer built from the same `dist-win/` folder:
+
+```sh
+tools/build-windows.sh             # portable folder
+tools/build-windows-installer.sh   # setup .exe (needs Inno Setup 6)
+```
+
+What it does:
+
+- **per-user installation** (`%LOCALAPPDATA%\Programs\USB Monitor Controller`),
+  no administrator rights, no service;
+- Start menu entries (monitor + theme editor), optional desktop icon;
+- optional **"Start at login"**: a shortcut in the *Startup* folder running
+  `lcd-monitor.exe --tray` (you can also toggle it later from the tray menu);
+- registers in *Settings → Apps* with an uninstaller;
+- uninstall stops a running instance, removes the files, the shortcuts and the
+  configuration (`%APPDATA%\usb-monitor-controller`).
+
+Silent deployment (second PC, script, remote install):
+
+```
+usb-monitor-controller-0.1.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=autostart
+```
+
+Verified in the Windows 10 VM: silent install (40 files), tray binary runs
+(`lcd-monitor.exe --once`), the startup shortcut is created, and
+`unins000.exe /VERYSILENT` removes the installation directory completely.
+The installer is built for Windows 10+ (`MinVersion=10.0`), x64 only.
+
+The portable zip stays the reference artefact: it needs no installation and
+contains exactly the same files.
+
+## 4. Windows-specific behaviour
 
 | Topic | Linux | Windows |
 |---|---|---|
@@ -85,7 +120,7 @@ For temperatures, install
 enable *Options → Remote Web Server → Run* (port 8085). This is the same
 provider the Python project uses on Windows.
 
-## 4. Known limitations
+## 5. Known limitations
 
 - No hardware validation of the serial link under Windows (the VM had no USB
   screen passthrough). `lcd-cli list` runs and returns nothing without a device.
@@ -96,7 +131,7 @@ provider the Python project uses on Windows.
 - Native USB (`TUR_USB`) uses libusb: it builds and links, but the WinUSB driver
   must be bound to the device with Zadig on a real machine.
 
-## 5. Cross-checking from Linux
+## 6. Cross-checking from Linux
 
 The Windows binary cannot be run here, but the protocol encoders are covered by
 `lcd-selftest`, which the Windows build runs too (14 checks, all passing in the
