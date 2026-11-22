@@ -29,7 +29,11 @@ constexpr std::uint64_t kStaticUptime = 4294036;
 
 std::string strftimeText(const char* format, std::time_t when) {
     std::tm local{};
+#if defined(_WIN32)
+    localtime_s(&local, &when);
+#else
     localtime_r(&when, &local);
+#endif
     char buffer[128];
     const std::size_t written = std::strftime(buffer, sizeof(buffer), format, &local);
     return std::string(buffer, written);
@@ -80,7 +84,11 @@ public:
         m.disk.free = static_cast<std::uint64_t>(
             std::floor(kDiskTotalGb / 100.0 * (100.0 - kPercentage)) * 1e9);
         m.disk.total = m.disk.used + m.disk.free;
-        m.disk.mountPoint = settings_.diskMount;
+#if defined(_WIN32)
+        m.disk.mountPoint = settings_.diskMount.empty() ? "C:\\" : settings_.diskMount;
+#else
+        m.disk.mountPoint = settings_.diskMount.empty() ? "/" : settings_.diskMount;
+#endif
 
         for (NetMetrics* net : {&m.eth, &m.wlo}) {
             net->uploadBps = kNetworkBytes;
@@ -146,7 +154,11 @@ public:
         m.disk.total = 1000ull * 1000 * 1000 * 1000;
         m.disk.used = static_cast<std::uint64_t>(m.disk.total * m.disk.usedPercent / 100.0);
         m.disk.free = m.disk.total - m.disk.used;
-        m.disk.mountPoint = settings_.diskMount;
+#if defined(_WIN32)
+        m.disk.mountPoint = settings_.diskMount.empty() ? "C:\\" : settings_.diskMount;
+#else
+        m.disk.mountPoint = settings_.diskMount.empty() ? "/" : settings_.diskMount;
+#endif
 
         for (NetMetrics* net : {&m.eth, &m.wlo}) {
             net->uploadBps = rate(rng_);

@@ -29,3 +29,8 @@ screencap.png
 theme-preview.png
 frame.png
 frames/
+
+# Windows build output
+dist-win/
+build-win/
+usb-monitor-controller-windows-x64.zip

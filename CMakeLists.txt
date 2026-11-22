@@ -46,7 +46,6 @@ add_library(lcdctl STATIC
     src/theme.cpp
     src/theme_render.cpp
     src/sensors.cpp
-    src/sensors_linux.cpp
     src/settings.cpp
     src/monitor.cpp
     src/transport.cpp
@@ -62,9 +61,18 @@ add_library(lcdctl STATIC
     src/drivers/turing_usb.cpp
     src/factory.cpp
 )
+
+# Real-sensors provider: procfs/sysfs on Unix, Win32 APIs on Windows.
+if(WIN32)
+    target_sources(lcdctl PRIVATE src/sensors_windows.cpp)
+else()
+    target_sources(lcdctl PRIVATE src/sensors_linux.cpp)
+endif()
 target_include_directories(lcdctl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(lcdctl PUBLIC PkgConfig::PNG PkgConfig::JPEG PkgConfig::FREETYPE yaml-cpp::yaml-cpp)
-if(UNIX AND NOT APPLE)
+if(WIN32)
+    target_link_libraries(lcdctl PUBLIC setupapi advapi32 iphlpapi ws2_32)
+elseif(UNIX AND NOT APPLE)
     target_link_libraries(lcdctl PUBLIC ${CMAKE_DL_LIBS})
 endif()
 
@@ -182,8 +190,10 @@ function(lcdctl_enable_qt target)
     set_target_properties(${target} PROPERTIES
         AUTOMOC ON
         POSITION_INDEPENDENT_CODE ON)
-    target_compile_options(${target} PRIVATE -fPIC -fno-pie)
-    target_link_options(${target} PRIVATE -no-pie)
+    if(NOT WIN32)
+        target_compile_options(${target} PRIVATE -fPIC -fno-pie)
+        target_link_options(${target} PRIVATE -no-pie)
+    endif()
 endfunction()
 
 add_executable(lcd-monitor src/tools/monitor_main.cpp)

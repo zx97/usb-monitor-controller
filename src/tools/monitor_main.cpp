@@ -188,7 +188,7 @@ std::unique_ptr<SensorProvider> makeSensors(const Settings& settings,
     if (kind == "RANDOM") {
         return makeRandomSensors(settings.sensorSettings());
     }
-    return makeLinuxSensors(settings.sensorSettings());
+    return makeSystemSensors(settings.sensorSettings());
 }
 
 std::unique_ptr<LcdComm> openDevice(const Settings& settings, const Theme& theme) {
@@ -219,6 +219,24 @@ std::unique_ptr<LcdComm> openDevice(const Settings& settings, const Theme& theme
     return lcd;
 }
 
+// Minimal JSON string escaping: Windows paths ("C:\") and device names must not
+// produce invalid JSON.
+std::string jsonEscape(const std::string& value) {
+    std::string out;
+    out.reserve(value.size() + 8);
+    for (char c : value) {
+        switch (c) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default: out += c; break;
+        }
+    }
+    return out;
+}
+
 void printMetricsJson(const Metrics& m) {
     std::printf("{\n");
     std::printf("  \"cpu\": {\"percent\": %.1f, \"frequency_mhz\": %.0f, \"load\": [%.1f, %.1f, %.1f],"
@@ -230,7 +248,7 @@ void printMetricsJson(const Metrics& m) {
                 " \"frequency_mhz\": %.0f, \"model\": \"%s\"},\n",
                 m.gpu.available ? "true" : "false", m.gpu.load, m.gpu.memoryPercent,
                 m.gpu.memoryUsedMb, m.gpu.memoryTotalMb, m.gpu.temperatureC, m.gpu.frequencyMhz,
-                m.gpu.model.c_str());
+                jsonEscape(m.gpu.model).c_str());
     std::printf("  \"memory\": {\"percent\": %.1f, \"used\": %llu, \"free\": %llu, \"total\": %llu},\n",
                 m.memory.virtualPercent, static_cast<unsigned long long>(m.memory.virtualUsed),
                 static_cast<unsigned long long>(m.memory.virtualFree),
@@ -239,13 +257,14 @@ void printMetricsJson(const Metrics& m) {
                 " \"mount\": \"%s\"},\n",
                 m.disk.usedPercent, static_cast<unsigned long long>(m.disk.used),
                 static_cast<unsigned long long>(m.disk.free),
-                static_cast<unsigned long long>(m.disk.total), m.disk.mountPoint.c_str());
+                static_cast<unsigned long long>(m.disk.total),
+                jsonEscape(m.disk.mountPoint).c_str());
     std::printf("  \"network\": {\"eth\": {\"up_bps\": %.0f, \"down_bps\": %.0f, \"name\": \"%s\"},"
                 " \"wlo\": {\"up_bps\": %.0f, \"down_bps\": %.0f, \"name\": \"%s\"}},\n",
-                m.eth.uploadBps, m.eth.downloadBps, m.eth.interfaceName.c_str(), m.wlo.uploadBps,
-                m.wlo.downloadBps, m.wlo.interfaceName.c_str());
-    std::printf("  \"date\": {\"day\": \"%s\", \"hour\": \"%s\"},\n", m.dateDay.c_str(),
-                m.dateHour.c_str());
+                m.eth.uploadBps, m.eth.downloadBps, jsonEscape(m.eth.interfaceName).c_str(),
+                m.wlo.uploadBps, m.wlo.downloadBps, jsonEscape(m.wlo.interfaceName).c_str());
+    std::printf("  \"date\": {\"day\": \"%s\", \"hour\": \"%s\"},\n",
+                jsonEscape(m.dateDay).c_str(), jsonEscape(m.dateHour).c_str());
     std::printf("  \"uptime_seconds\": %llu\n", static_cast<unsigned long long>(m.uptimeSeconds));
     std::printf("}\n");
 }

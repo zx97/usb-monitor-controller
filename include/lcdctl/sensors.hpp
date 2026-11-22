@@ -118,9 +118,14 @@ std::unique_ptr<SensorProvider> makeStaticSensors(const SensorSettings& settings
 // graphs for a quick visual check.
 std::unique_ptr<SensorProvider> makeRandomSensors(const SensorSettings& settings);
 
-// Linux implementation: /proc/stat, /proc/meminfo, statvfs, /proc/net/dev,
-// hwmon, cpufreq and an optional NVML/AMD GPU backend.
-std::unique_ptr<SensorProvider> makeLinuxSensors(const SensorSettings& settings);
+// Real hardware sensors for the current platform: Linux (procfs, sysfs, hwmon,
+// NVML/AMD) or Windows (Win32 APIs, nvml.dll, optional LibreHardwareMonitor).
+std::unique_ptr<SensorProvider> makeSystemSensors(const SensorSettings& settings);
+
+// Historical name, kept for source compatibility.
+inline std::unique_ptr<SensorProvider> makeLinuxSensors(const SensorSettings& settings) {
+    return makeSystemSensors(settings);
+}
 
 // Parse "--stub static[:cpu=42,gpu=12]" style overrides.
 std::unique_ptr<SensorProvider> makeStubSensors(const std::string& spec,

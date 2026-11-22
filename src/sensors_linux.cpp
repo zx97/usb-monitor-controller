@@ -718,7 +718,7 @@ private:
 
 }  // namespace
 
-std::unique_ptr<SensorProvider> makeLinuxSensors(const SensorSettings& settings) {
+std::unique_ptr<SensorProvider> makeSystemSensors(const SensorSettings& settings) {
     return std::make_unique<LinuxProvider>(settings);
 }
 

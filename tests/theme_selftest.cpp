@@ -190,9 +190,11 @@ void testYamlRoundTrip(const std::string& root, const std::string& fonts) {
     check(!yaml.empty(), "serialization produces YAML");
     check(yaml.find("STATS:") != std::string::npos, "serialized YAML keeps STATS");
 
-    std::filesystem::create_directories("/dev/shm/lcdctl-theme-test/roundtrip");
+    const std::filesystem::path roundTrip =
+        std::filesystem::temp_directory_path() / "lcdctl-theme-test" / "roundtrip";
+    std::filesystem::create_directories(roundTrip);
     {
-        std::FILE* file = std::fopen("/dev/shm/lcdctl-theme-test/roundtrip/theme.yaml", "w");
+        std::FILE* file = std::fopen((roundTrip / "theme.yaml").string().c_str(), "w");
         check(file != nullptr, "round-trip file created");
         if (file) {
             std::fwrite(yaml.data(), 1, yaml.size(), file);
@@ -201,8 +203,7 @@ void testYamlRoundTrip(const std::string& root, const std::string& fonts) {
     }
     check(yaml.find("DISPLAY_ORIENTATION") != std::string::npos,
           "serialized YAML keeps the orientation");
-    const lcdctl::Theme reloaded =
-        lcdctl::Theme::load("/dev/shm/lcdctl-theme-test/roundtrip", fonts);
+    const lcdctl::Theme reloaded = lcdctl::Theme::load(roundTrip.string(), fonts);
     check(reloaded.orientation == original.orientation, "round-trip keeps the orientation");
     check(reloaded.items.size() == original.items.size(), "round-trip keeps every item");
     for (const lcdctl::ThemeItem& item : original.items) {
@@ -257,8 +258,13 @@ void testOrientation() {
           "DISPLAY_REVERSE flips a landscape theme");
 }
 
-// "Start at login": an XDG autostart entry in ~/.config/autostart.
+// "Start at login": an XDG autostart entry in ~/.config/autostart. The Windows
+// implementation writes the registry, so the test stays on the POSIX path.
 void testAutostart() {
+#if defined(_WIN32)
+    std::printf("autostart test skipped on Windows (registry)\n");
+    return;
+#else
     const std::string home = "/dev/shm/lcdctl-autostart-test";
     std::filesystem::create_directories(home);
     setenv("HOME", home.c_str(), 1);
@@ -279,6 +285,7 @@ void testAutostart() {
 
     check(lcdctl::Settings::setAutostartEnabled(false), "autostart entry removed");
     check(!lcdctl::Settings::autostartEnabled(), "autostart is off again");
+#endif
 }
 
 // Render every theme of a directory: the bundled collection, or a

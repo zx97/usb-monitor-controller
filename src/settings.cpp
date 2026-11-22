@@ -8,6 +8,10 @@
 
 #include <yaml-cpp/yaml.h>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 #include "lcdctl/logging.hpp"
 #include "lcdctl/paths.hpp"
 
@@ -22,7 +26,11 @@ std::string envOr(const char* name, const std::string& fallback) {
 }
 
 std::string homeDir() {
+#if defined(_WIN32)
+    return envOr("USERPROFILE", "");
+#else
     return envOr("HOME", "");
+#endif
 }
 
 std::string scalar(const YAML::Node& node, const std::string& fallback = "") {
@@ -88,10 +96,17 @@ std::string defaultConfigPath() {
     if (fs::exists("config.yaml", ec)) {
         return "config.yaml";
     }
+#if defined(_WIN32)
+    const std::string appData = envOr("APPDATA", homeDir());
+    if (!appData.empty()) {
+        return (fs::path(appData) / "usb-monitor-controller" / "config.yaml").string();
+    }
+#else
     const std::string home = homeDir();
     if (!home.empty()) {
         return (fs::path(home) / ".config" / "usb-monitor-controller" / "config.yaml").string();
     }
+#endif
     return "config.yaml";
 }
 
@@ -286,23 +301,70 @@ SensorSettings Settings::sensorSettings() const {
 }
 
 std::string Settings::autostartFilePath() {
+#if defined(_WIN32)
+    return "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+           "\\USB Monitor Controller";
+#else
     const std::string home = homeDir();
     if (home.empty()) {
         return "";
     }
     return (fs::path(home) / ".config" / "autostart" / "usb-monitor-controller.desktop").string();
+#endif
 }
 
 bool Settings::autostartEnabled() {
+#if defined(_WIN32)
+    HKEY key = nullptr;
+    if (::RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                        0, KEY_READ, &key) != ERROR_SUCCESS) {
+        return false;
+    }
+    const LONG status = ::RegQueryValueExW(key, L"USB Monitor Controller", nullptr, nullptr, nullptr,
+                                           nullptr);
+    ::RegCloseKey(key);
+    return status == ERROR_SUCCESS;
+#else
     const std::string path = autostartFilePath();
     if (path.empty()) {
         return false;
     }
     std::error_code ec;
     return fs::exists(path, ec);
+#endif
 }
 
 bool Settings::setAutostartEnabled(bool enabled, const std::string& command) {
+#if defined(_WIN32)
+    HKEY key = nullptr;
+    if (::RegCreateKeyExW(HKEY_CURRENT_USER,
+                          L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, nullptr,
+                          0, KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS) {
+        return false;
+    }
+    LONG status = ERROR_SUCCESS;
+    if (enabled) {
+        std::string executable = command;
+        if (executable.empty()) {
+            wchar_t buffer[MAX_PATH * 4] = {0};
+            if (::GetModuleFileNameW(nullptr, buffer, MAX_PATH * 4) > 0) {
+                executable = std::filesystem::path(buffer).string();
+            }
+        }
+        const std::wstring value = std::wstring(L"\"") + std::wstring(executable.begin(), executable.end()) +
+                                   L"\" --tray";
+        status = ::RegSetValueExW(key, L"USB Monitor Controller", 0, REG_SZ,
+                                  reinterpret_cast<const BYTE*>(value.c_str()),
+                                  static_cast<DWORD>((value.size() + 1) * sizeof(wchar_t)));
+    } else {
+        status = ::RegDeleteValueW(key, L"USB Monitor Controller");
+        if (status == ERROR_FILE_NOT_FOUND) {
+            status = ERROR_SUCCESS;
+        }
+    }
+    ::RegCloseKey(key);
+    return status == ERROR_SUCCESS;
+#else
     const std::string path = autostartFilePath();
     if (path.empty()) {
         return false;
@@ -348,6 +410,7 @@ bool Settings::setAutostartEnabled(bool enabled, const std::string& command) {
            << "X-GNOME-Autostart-enabled=true\n"
            << "Categories=System;Monitor;\n";
     return true;
+#endif
 }
 
 }  // namespace lcdctl

@@ -61,7 +61,11 @@ public:
     bool open(const std::string& port, int baud = 115200, bool rtscts = true,
               int attempts = 10, int delaySeconds = 1);
 
+#if defined(_WIN32)
+    bool isOpen() const override { return handle_ != nullptr; }
+#else
     bool isOpen() const override { return fd_ >= 0; }
+#endif
     void close() override;
     bool write(const std::uint8_t* data, std::size_t len) override;
     std::vector<std::uint8_t> read(std::size_t len, int timeoutMs = 1000) override;
@@ -78,7 +82,11 @@ public:
     static std::vector<SerialPortInfo> enumerate();
 
 private:
+#if defined(_WIN32)
+    void* handle_ = nullptr;   // HANDLE (CreateFile), opaque to avoid windows.h here
+#else
     int fd_ = -1;
+#endif
     std::string port_;
     int baud_ = 115200;
     bool rtscts_ = true;

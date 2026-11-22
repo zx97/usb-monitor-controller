@@ -95,6 +95,10 @@ See [`docs/BUILD.md`](docs/BUILD.md) for details (options, packaging,
 troubleshooting) and [`docs/STATIC_BUILD.md`](docs/STATIC_BUILD.md) for the
 distributable static build.
 
+**Windows 10/11**: MSYS2 UCRT64 + Qt 6 — `tools/build-windows.sh` builds, tests
+and packages a portable `dist-win/` folder with every DLL. See
+[`docs/WINDOWS.md`](docs/WINDOWS.md).
+
 ## Usage
 
 ```sh
@@ -277,6 +281,7 @@ a static library `liblcdctl.a`.
 - [`docs/BUILD.md`](docs/BUILD.md) — build, packaging, permissions,
   troubleshooting.
 - [`docs/THEMES.md`](docs/THEMES.md) — themes, sensors, daemon, editor.
+- [`docs/WINDOWS.md`](docs/WINDOWS.md) — building and packaging on Windows.
 
 ## Tests
 

@@ -22,6 +22,13 @@
 #include <unistd.h>
 #endif
 
+#if defined(_WIN32)
+#include <windows.h>
+#include <setupapi.h>
+#include <initguid.h>
+#include <ntddser.h>
+#endif
+
 #if defined(LCDCTL_WITH_LIBUSB)
 #include <libusb.h>
 #endif
@@ -32,7 +39,258 @@ namespace lcdctl {
 // USB CDC serial
 // ===========================================================================
 
-#if defined(__linux__) || defined(__APPLE__) || defined(__unix__)
+#if defined(_WIN32)
+
+// ===========================================================================
+// Windows: serial ports through the Win32 comm API
+// ===========================================================================
+namespace {
+
+std::wstring widen(const std::string& text) {
+    if (text.empty()) {
+        return {};
+    }
+    const int size = ::MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
+    std::wstring wide(static_cast<std::size_t>(size), L'\0');
+    ::MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, wide.data(), size);
+    if (!wide.empty() && wide.back() == L'\0') {
+        wide.pop_back();
+    }
+    return wide;
+}
+
+std::string narrow(const wchar_t* text) {
+    if (text == nullptr || *text == L'\0') {
+        return {};
+    }
+    const int size = ::WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
+    std::string result(static_cast<std::size_t>(size), '\0');
+    ::WideCharToMultiByte(CP_UTF8, 0, text, -1, result.data(), size, nullptr, nullptr);
+    if (!result.empty() && result.back() == '\0') {
+        result.pop_back();
+    }
+    return result;
+}
+
+std::string registryString(HDEVINFO devices, SP_DEVINFO_DATA& info, DWORD property) {
+    wchar_t buffer[512] = {0};
+    DWORD type = 0;
+    if (!::SetupDiGetDeviceRegistryPropertyW(devices, &info, property, &type,
+                                             reinterpret_cast<PBYTE>(buffer), sizeof(buffer),
+                                             nullptr)) {
+        return {};
+    }
+    return narrow(buffer);
+}
+
+// "USB\VID_1A86&PID_5722&REV_0264" -> vid/pid of the first hardware id.
+void parseHardwareId(const std::string& hardwareId, SerialPortInfo& info) {
+    const std::size_t vidPosition = hardwareId.find("VID_");
+    if (vidPosition != std::string::npos && hardwareId.size() >= vidPosition + 8) {
+        info.vid = static_cast<std::uint16_t>(
+            std::stoul(hardwareId.substr(vidPosition + 4, 4), nullptr, 16));
+    }
+    const std::size_t pidPosition = hardwareId.find("PID_");
+    if (pidPosition != std::string::npos && hardwareId.size() >= pidPosition + 8) {
+        info.pid = static_cast<std::uint16_t>(
+            std::stoul(hardwareId.substr(pidPosition + 4, 4), nullptr, 16));
+    }
+}
+
+// "USB-SERIAL CH340 (COM3)" / "USB Serial Device (COM4)" -> "COM3".
+std::string portFromFriendlyName(const std::string& friendlyName) {
+    const std::size_t open = friendlyName.rfind('(');
+    const std::size_t close = friendlyName.rfind(')');
+    if (open == std::string::npos || close == std::string::npos || close <= open + 1) {
+        return {};
+    }
+    return friendlyName.substr(open + 1, close - open - 1);
+}
+
+}  // namespace
+
+std::vector<SerialPortInfo> SerialTransport::enumerate() {
+    std::vector<SerialPortInfo> ports;
+    HDEVINFO devices = ::SetupDiGetClassDevsW(&GUID_DEVINTERFACE_COMPORT, nullptr, nullptr,
+                                              DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+    if (devices == INVALID_HANDLE_VALUE) {
+        return ports;
+    }
+
+    SP_DEVICE_INTERFACE_DATA interfaceData{};
+    interfaceData.cbSize = sizeof(interfaceData);
+    for (DWORD index = 0;
+         ::SetupDiEnumDeviceInterfaces(devices, nullptr, &GUID_DEVINTERFACE_COMPORT, index,
+                                       &interfaceData);
+         ++index) {
+        DWORD required = 0;
+        ::SetupDiGetDeviceInterfaceDetailW(devices, &interfaceData, nullptr, 0, &required, nullptr);
+        if (required == 0) {
+            continue;
+        }
+        std::vector<unsigned char> storage(required);
+        auto* detail = reinterpret_cast<PSP_DEVICE_INTERFACE_DETAIL_DATA_W>(storage.data());
+        detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+        SP_DEVINFO_DATA deviceInfo{};
+        deviceInfo.cbSize = sizeof(deviceInfo);
+        if (!::SetupDiGetDeviceInterfaceDetailW(devices, &interfaceData, detail, required, nullptr,
+                                                &deviceInfo)) {
+            continue;
+        }
+
+        const std::string friendly = registryString(devices, deviceInfo, SPDRP_FRIENDLYNAME);
+        const std::string portName = portFromFriendlyName(friendly);
+        if (portName.empty()) {
+            continue;
+        }
+
+        SerialPortInfo info;
+        info.device = portName;
+        info.product = friendly;
+        const std::string hardwareId = registryString(devices, deviceInfo, SPDRP_HARDWAREID);
+        parseHardwareId(hardwareId, info);
+
+        // Device path: \\?\usb#vid_1a86&pid_5722#<serial>#{...}
+        const std::string path = narrow(detail->DevicePath);
+        const std::size_t firstHash = path.find('#');
+        const std::size_t secondHash =
+            firstHash == std::string::npos ? std::string::npos : path.find('#', firstHash + 1);
+        if (secondHash != std::string::npos) {
+            const std::size_t end = path.find('#', secondHash + 1);
+            info.serial = path.substr(secondHash + 1, end - secondHash - 1);
+        }
+        ports.push_back(std::move(info));
+    }
+    ::SetupDiDestroyDeviceInfoList(devices);
+    return ports;
+}
+
+SerialTransport::~SerialTransport() { close(); }
+
+void SerialTransport::close() {
+    if (handle_ != nullptr) {
+        ::CloseHandle(static_cast<HANDLE>(handle_));
+        handle_ = nullptr;
+    }
+}
+
+bool SerialTransport::open(const std::string& port, int baud, bool rtscts, int attempts,
+                           int delaySeconds) {
+    port_ = port;
+    baud_ = baud;
+    rtscts_ = rtscts;
+
+    std::string path = port;
+    if (path.rfind("\\\\.\\", 0) != 0 && path.rfind("\\\\?\\", 0) != 0) {
+        path = "\\\\.\\" + path;   // \\.\COM3
+    }
+
+    for (int attempt = 1; attempt <= attempts; ++attempt) {
+        HANDLE handle = ::CreateFileW(widen(path).c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+                                      nullptr, OPEN_EXISTING, 0, nullptr);
+        if (handle != INVALID_HANDLE_VALUE) {
+            DCB dcb{};
+            dcb.DCBlength = sizeof(dcb);
+            if (::GetCommState(handle, &dcb)) {
+                dcb.BaudRate = static_cast<DWORD>(baud);
+                dcb.ByteSize = 8;
+                dcb.Parity = NOPARITY;
+                dcb.StopBits = ONESTOPBIT;
+                dcb.fBinary = TRUE;
+                dcb.fParity = FALSE;
+                dcb.fOutxCtsFlow = rtscts ? TRUE : FALSE;
+                dcb.fRtsControl = rtscts ? RTS_CONTROL_HANDSHAKE : RTS_CONTROL_ENABLE;
+                dcb.fDtrControl = DTR_CONTROL_ENABLE;
+                ::SetCommState(handle, &dcb);
+                ::SetupComm(handle, 8192, 8192);
+                ::PurgeComm(handle, PURGE_RXCLEAR | PURGE_TXCLEAR);
+                handle_ = handle;
+                LCDCTL_DEBUG << "Opened serial port " << port << " @" << baud;
+                return true;
+            }
+            ::CloseHandle(handle);
+        }
+        LCDCTL_WARN << "Cannot open " << port << " (error " << ::GetLastError() << "), retry "
+                    << attempt << "/" << attempts;
+        if (attempt < attempts && delaySeconds > 0) {
+            std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
+        }
+    }
+    return false;
+}
+
+bool SerialTransport::write(const std::uint8_t* data, std::size_t len) {
+    if (handle_ == nullptr) {
+        return false;
+    }
+    std::size_t written = 0;
+    while (written < len) {
+        DWORD sent = 0;
+        if (!::WriteFile(static_cast<HANDLE>(handle_), data + written,
+                         static_cast<DWORD>(len - written), &sent, nullptr)) {
+            LCDCTL_ERROR << "serial write failed (error " << ::GetLastError() << ")";
+            return false;
+        }
+        written += sent;
+    }
+    return true;
+}
+
+std::vector<std::uint8_t> SerialTransport::read(std::size_t len, int timeoutMs) {
+    std::vector<std::uint8_t> out;
+    if (handle_ == nullptr || len == 0) {
+        return out;
+    }
+    COMMTIMEOUTS timeouts{};
+    // ReadIntervalTimeout = MAXDWORD with a total constant returns as soon as
+    // something is available, and waits at most timeoutMs otherwise.
+    timeouts.ReadIntervalTimeout = MAXDWORD;
+    timeouts.ReadTotalTimeoutMultiplier = 0;
+    timeouts.ReadTotalTimeoutConstant = static_cast<DWORD>(timeoutMs);
+    ::SetCommTimeouts(static_cast<HANDLE>(handle_), &timeouts);
+
+    out.resize(len);
+    DWORD received = 0;
+    if (!::ReadFile(static_cast<HANDLE>(handle_), out.data(), static_cast<DWORD>(len), &received,
+                    nullptr)) {
+        out.clear();
+        return out;
+    }
+    out.resize(received);
+    return out;
+}
+
+std::vector<std::uint8_t> SerialTransport::readAll() {
+    std::vector<std::uint8_t> out;
+    if (handle_ == nullptr) {
+        return out;
+    }
+    DWORD errors = 0;
+    COMSTAT status{};
+    if (!::ClearCommError(static_cast<HANDLE>(handle_), &errors, &status)) {
+        return out;
+    }
+    if (status.cbInQue == 0) {
+        return out;
+    }
+    return read(status.cbInQue, 200);
+}
+
+void SerialTransport::flushInput() {
+    if (handle_ != nullptr) {
+        ::PurgeComm(static_cast<HANDLE>(handle_), PURGE_RXCLEAR);
+    }
+}
+
+bool SerialTransport::reopen() {
+    if (port_.empty()) {
+        return false;
+    }
+    close();
+    return open(port_, baud_, rtscts_, 10, 1);
+}
+
+#elif defined(__linux__) || defined(__APPLE__) || defined(__unix__)
 
 namespace {
 
