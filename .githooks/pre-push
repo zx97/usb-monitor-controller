@@ -1,0 +1,7 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Refuse to push a branch that carries data which is not anonymised. The whole
+# tracked tree is checked, not only the last commit.
+#
+exec python3 "$(git rev-parse --show-toplevel)/tools/check_anonymity.py"

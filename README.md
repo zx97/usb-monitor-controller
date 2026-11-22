@@ -1,5 +1,9 @@
 # USB-monitor-controller
 
+[![ci](https://github.com/zx97/usb-monitor-controller/actions/workflows/ci.yml/badge.svg)](https://github.com/zx97/usb-monitor-controller/actions/workflows/ci.yml)
+[![anonymity](https://github.com/zx97/usb-monitor-controller/actions/workflows/anonymity.yml/badge.svg)](https://github.com/zx97/usb-monitor-controller/actions/workflows/anonymity.yml)
+[![license: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+
 A small **C++17** controller for the tiny USB LCD screens supported by
 [turing-smart-screen-python](https://github.com/mathoudebine/turing-smart-screen-python)
 (Turing Smart Screen / TURZX, XuanFang, Kipye Qiye, WeAct Studio…).
@@ -296,6 +300,9 @@ a static library `liblcdctl.a`.
   troubleshooting.
 - [`docs/THEMES.md`](docs/THEMES.md) — themes, sensors, daemon, editor.
 - [`docs/WINDOWS.md`](docs/WINDOWS.md) — building and packaging on Windows.
+- [`docs/PUBLISHING.md`](docs/PUBLISHING.md) — remotes, anonymity hooks, releases.
+- [`CHANGELOG.md`](CHANGELOG.md) — what changed in each version.
+- [`AUTHORS.md`](AUTHORS.md) — upstream authors, contributors and licences.
 
 ## Tests
 

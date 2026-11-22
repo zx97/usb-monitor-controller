@@ -1,0 +1,15 @@
+name: anonymity
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Anonymity check (tree + history)
+        run: python3 tools/check_anonymity.py --history

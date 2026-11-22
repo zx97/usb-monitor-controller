@@ -1,0 +1,74 @@
+# GitLab mirror of the GitHub pipeline: same checks, Linux artefacts published
+# here, Windows artefacts taken from the GitHub release (a GitLab Windows runner
+# would double the build time for the same result).
+
+stages:
+  - test
+  - package
+  - release
+
+variables:
+  GIT_DEPTH: "20"
+
+anonymity:
+  stage: test
+  image: python:3
+  script:
+    - python3 tools/check_anonymity.py --history
+
+build:
+  stage: test
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends cmake ninja-build pkg-config g++
+      libpng-dev libjpeg-dev libfreetype-dev libusb-1.0-0-dev libssl-dev
+      libyaml-cpp-dev qt6-base-dev
+  script:
+    - cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    - cmake --build build --parallel "$(nproc)"
+    - ctest --test-dir build --output-on-failure
+
+# Release tarball (tag only). Built once, published as a job artefact and linked
+# from the release page.
+package:
+  stage: package
+  image: ubuntu:24.04
+  rules:
+    - if: $CI_COMMIT_TAG
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends cmake ninja-build pkg-config g++
+      libpng-dev libjpeg-dev libfreetype-dev libusb-1.0-0-dev libssl-dev
+      libyaml-cpp-dev qt6-base-dev
+  script:
+    - cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    - cmake --build build --parallel "$(nproc)"
+    - ctest --test-dir build --output-on-failure
+    - tools/package-linux.sh --no-build
+    - echo "VERSION=${CI_COMMIT_TAG#v}" > version.env
+  artifacts:
+    paths:
+      - dist/*.tar.gz
+    reports:
+      dotenv: version.env
+    expire_in: 1 month
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: package
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    - echo "creating release $CI_COMMIT_TAG"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "$CI_COMMIT_TAG"
+    description: "See [CHANGELOG.md](CHANGELOG.md). Windows artefacts (portable zip + installer) are attached to the GitHub release."
+    assets:
+      links:
+        - name: "Linux tarball (x86_64)"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/dist/usb-monitor-controller-${VERSION}-linux-x86_64.tar.gz?job=package"

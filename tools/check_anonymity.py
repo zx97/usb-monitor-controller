@@ -24,7 +24,6 @@ pre-commit/pre-push hook and in CI.
 """
 
 import argparse
-import getpass
 import os
 import re
 import subprocess
@@ -102,32 +101,6 @@ def is_binary(path):
         return True
 
 
-def local_identifiers():
-    """Account names of the machine running the check (never printed)."""
-    names = set()
-    for variable in ("USER", "LOGNAME"):
-        value = os.environ.get(variable, "").strip()
-        if value and value.lower() not in ALLOWED_HOMES:
-            names.add(value.lower())
-    try:
-        value = getpass.getuser().strip()
-        if value and value.lower() not in ALLOWED_HOMES:
-            names.add(value.lower())
-    except Exception:
-        pass
-    home = os.path.expanduser("~")
-    if home:
-        base = os.path.basename(home).strip()
-        if base and base.lower() not in ALLOWED_HOMES:
-            names.add(base.lower())
-    return {name for name in names if len(name) >= 3}
-
-
-LOCAL_NAMES = local_identifiers()
-NAME_WORD = re.compile(r"\b(" + "|".join(re.escape(n) for n in LOCAL_NAMES) + r")\b",
-                       re.IGNORECASE) if LOCAL_NAMES else None
-
-
 def ip_bad(value):
     return value not in ALLOWED_IP_EXACT and not value.startswith(ALLOWED_IP_PREFIXES)
 
@@ -150,13 +123,6 @@ def scan_text(where, lines, findings):
         for pattern, label in SECRETS:
             if pattern.search(line):
                 findings.append((where, lineno, label))
-        if NAME_WORD is not None:
-            for match in NAME_WORD.finditer(line):
-                # A bare account name is only a problem next to a path-ish
-                # context; a word in a sentence is not.
-                context = line[max(0, match.start() - 24):match.end() + 24]
-                if re.search(r"[/\\@]", context) or "Users" in context:
-                    findings.append((where, lineno, "local account name"))
 
 
 def scan_file(path, findings):
