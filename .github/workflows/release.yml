@@ -92,4 +92,4 @@ jobs:
           files: |
             artifacts/linux-tarball/*.tar.gz
             artifacts/windows-package/*.zip
-            artifacts/windows-package/*-setup.exe
+            artifacts/windows-package/**/*-setup.exe
