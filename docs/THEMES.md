@@ -136,8 +136,10 @@ nothing per frame; `MonitorEngine::framePixels()` gives the worst-case cost, and
 
 ## 5. Daemon details
 
-- Single render thread: only it talks to the transport, so no locking is needed
-  around `LcdComm`.
+- One render thread owns the transport: `lcd-monitor --tray` runs the engine in
+  a `QThread` and the GUI only sends it commands (queued), so the menus and the
+  window answer immediately even while a 2.4 s frame is being sent. `--headless`
+  runs the same loop on the main thread.
 - Sensors are sampled in the same thread (procfs reads are cheap; NVML is
   ~1 ms). A due item triggers one sample, at most every 200 ms.
 - `SIGINT`/`SIGTERM` → last tick, `screenOff()`, exit 0.

@@ -106,6 +106,11 @@ it *is* started from a terminal (`--once`, `--simulate`, `--headless`), it
 attaches to the parent console so the output stays visible; a redirected
 stdout/stderr (`> file`) is left untouched.
 
+The device and the render loop run in a **worker thread**: every USB transfer is
+synchronous and a revision A screen needs ~2.4 s for a full frame, so the tray
+menu and the window stay responsive (the panel draws at its own pace, the UI
+does not wait for it). The same applies on Linux.
+
 Two ways to drive it with the mouse:
 
 - **Tray icon** — same menu as under KDE (Screen on/off, Brightness,
