@@ -49,6 +49,8 @@
 #include <QPixmap>
 #include <QProcess>
 #include <QPushButton>
+#include <QDir>
+#include <QLockFile>
 #include <QSharedMemory>
 #include <QSlider>
 #include <QStringList>
@@ -1150,21 +1152,24 @@ int main(int argc, char** argv) {
 
             // One instance only: a second launch asks the running one to show
             // its control window, then exits. Also protects the serial port.
-            QSharedMemory instance("usb-monitor-controller-instance");
-            if (!instance.create(16)) {
-                if (instance.attach()) {
-                    auto* bytes = static_cast<char*>(instance.data());
+            // QLockFile handles a lock left behind by a killed process (stale
+            // PID detection); a plain shared memory segment would not.
+            QLockFile instanceLock(QDir::tempPath() + "/usb-monitor-controller.lock");
+            instanceLock.setStaleLockTime(0);
+            QSharedMemory activation("usb-monitor-controller-activate");
+            if (!instanceLock.tryLock(100)) {
+                if (activation.create(16) || activation.attach()) {
+                    auto* bytes = static_cast<char*>(activation.data());
                     if (bytes != nullptr) {
                         bytes[0] = 1;   // "show yourself"
                     }
-                    instance.detach();
                 }
                 return 0;
             }
 
             MonitorApp monitor(settings, options,
                                options.get("--config", defaultConfigPath()),
-                               options.flag("--window"), &instance);
+                               options.flag("--window"), &activation);
             QString error;
             if (!monitor.start(&error)) {
                 std::cerr << "Error: " << error.toStdString() << std::endl;

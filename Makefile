@@ -11,7 +11,9 @@
 #   make themes     list the themes available to the daemon
 #   make preview    render the demo theme to theme-preview.png
 #   make editor     open the Qt6 theme editor
-#   make import-themes  copy upstream themes/fonts (see res/themes/README.md) on the demo theme
+#   make import-themes  copy upstream themes/fonts (see res/themes/README.md)
+#   make install    install for the current user (~/LocalApplications/usb-monitor-controller)
+#   make uninstall  remove that installation on the demo theme
 #   make static     build a distributable binary with static dependencies
 #   make clean      remove build directories
 #
@@ -33,7 +35,7 @@ CMAKE_FLAGS ?=
 JOBS        ?= $(shell nproc 2>/dev/null || echo 4)
 
 .PHONY: all build help test list probe sim static static-clean clean distclean \
-        monitor monitor-headless themes preview editor import-themes
+        monitor monitor-headless themes preview editor import-themes install uninstall
 
 all: build
 
@@ -50,6 +52,8 @@ help:
 	@echo "  make preview    render the demo theme -> theme-preview.png"
 	@echo "  make editor     open the Qt6 theme editor"
 	@echo "  make import-themes  copy upstream themes + fonts (IMPORT_ARGS=...)"
+	@echo "  make install    install for the current user (PREFIX=... to change)"
+	@echo "  make uninstall  remove that installation"
 	@echo "  make static     build a distributable, statically-linked binary"
 	@echo "  make static-clean  rebuild it from scratch (recompiles dependencies)"
 	@echo "  make clean      remove build/ and build-static/"
@@ -96,6 +100,13 @@ preview: build
 
 import-themes:
 	python3 tools/import-themes.py $(IMPORT_ARGS)
+
+# Per-user installation: binaries + res/ + docs + KDE menu entries.
+install: build
+	./tools/install-linux.sh --no-build $(if $(PREFIX),--prefix $(PREFIX),)
+
+uninstall:
+	./tools/install-linux.sh --uninstall $(if $(PREFIX),--prefix $(PREFIX),)
 
 editor: build
 	./$(BUILD_DIR)/lcd-theme-editor "$(BUILD_DIR)/res/themes" "$(BUILD_DIR)/res/fonts" demo-320x480

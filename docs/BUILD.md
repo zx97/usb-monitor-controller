@@ -172,3 +172,20 @@ The font is only needed by the `text` command; embed or ship
 | Rev C never answers HELLO | Screen asleep: send the RESTART/`reset` path once, or power-cycle. |
 | `TUR_USB` unavailable | Rebuild with libusb + openssl, and bind a WinUSB/libusb driver (Windows) or add a udev rule (Linux). |
 | `FreeType: cannot load font` | Pass `--font /path/to.ttf`; the bundled font was not copied next to the binary. |
+
+
+## Per-user installation (Linux)
+
+```sh
+make install                    # ~/LocalApplications/usb-monitor-controller
+make install PREFIX=~/apps/umbc # elsewhere
+make uninstall
+```
+
+`tools/install-linux.sh` copies the four binaries, `res/` (themes, fonts,
+icons) and the documentation, then writes the KDE/XDG menu entries
+(`~/.local/share/applications/`) with absolute paths. The binaries keep the same
+runtime dependencies as the build tree (Homebrew + distribution libraries), so
+nothing has to be compiled again to move the installation inside the same
+machine. A second launch never starts a second daemon: it asks the running one
+to show its control window (`QLockFile` guard, stale locks handled).

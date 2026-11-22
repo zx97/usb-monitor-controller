@@ -83,6 +83,17 @@ make static   # build a distributable binary with static dependencies
 make help
 ```
 
+Install it for your user (binaries, themes, fonts, icons, menu entries):
+
+```sh
+make install                 # ~/LocalApplications/usb-monitor-controller
+make install PREFIX=~/apps/umbc
+make uninstall
+```
+
+The installation is self-contained: `<prefix>/bin/`, `<prefix>/res/` and the
+KDE/XDG menu entries pointing at it. Nothing outside your home directory.
+
 Equivalently, by hand:
 
 ```sh
