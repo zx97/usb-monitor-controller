@@ -50,11 +50,19 @@ int MonitorEngine::minIntervalSeconds() const {
 }
 
 void MonitorEngine::start() {
+    repaintAll();
+    started_ = true;
+}
+
+void MonitorEngine::repaintAll() {
+    // The background must be re-sent, not just the stats: after a rotation the
+    // panel shows a rotated copy of the old frame (or nothing for 90°/270°,
+    // where the canvas dimensions swap), and after a screen-off the content is
+    // not guaranteed to survive on every model.
     renderer_->drawBackground();
     nextSensorRefresh_ = Clock::now();
     refreshSensors();
     redrawAll();
-    started_ = true;
 }
 
 void MonitorEngine::refreshSensors() {

@@ -444,13 +444,13 @@ public:
                 LCDCTL_WARN << "rotation failed: " << error.what();
             }
         }
-        // The engine caches the rendered values and the graph history; a
-        // rotation only changes the panel, so a full redraw is enough.
+        // A rotation changes the panel coordinate system: the previous frame is
+        // unusable (rotated, or in the old dimensions for 90°/270°). Redraw the
+        // static background and texts too, not only the stats.
         if (engine_) {
-            engine_->invalidate();
             busy_ = true;
             publish();
-            engine_->redrawAll();
+            engine_->repaintAll();
             busy_ = false;
         }
         publish();
@@ -464,10 +464,11 @@ public:
                 lcd_->screenOn();
                 lcd_->setBrightness(settings_.brightness);
                 engine_->setPaused(false);
-                engine_->invalidate();
+                // Some panels come back from screen-off without their previous
+                // bitmap: repaint the background and the static texts as well.
                 busy_ = true;
                 publish();
-                engine_->redrawAll();
+                engine_->repaintAll();
                 busy_ = false;
             } else {
                 engine_->setPaused(true);

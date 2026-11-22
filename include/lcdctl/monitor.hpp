@@ -30,8 +30,13 @@ public:
     MonitorEngine(Theme theme, DrawSurface& surface, std::unique_ptr<SensorProvider> sensors);
     ~MonitorEngine();
 
-    // Draw the static background, then one full frame of stats.
+    // Draw the static background, static texts and one full frame of stats.
     void start();
+
+    // Same drawing sequence, without the one-shot bookkeeping: use it whenever
+    // the panel lost its content (rotation, screen off/on, reconnect) and a
+    // simple redraw of the stats would leave the background stale.
+    void repaintAll();
 
     // Render the items whose interval elapsed. Call this often (20-50 ms).
     // Returns the number of primitives actually transmitted.

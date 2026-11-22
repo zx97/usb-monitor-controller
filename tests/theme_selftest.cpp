@@ -4,6 +4,7 @@
 // No hardware, no display server: everything runs against an OffscreenCanvas.
 
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -215,6 +216,35 @@ void testYamlRoundTrip(const std::string& root, const std::string& fonts) {
     }
 }
 
+// A rotation (or a screen off/on) leaves the panel without its previous frame:
+// redrawing only the stats is not enough, the background must be re-sent.
+void testFullRepaint(const std::string& root, const std::string& fonts) {
+    lcdctl::Theme theme = lcdctl::Theme::loadByName("demo-320x480", root, fonts);
+    lcdctl::SensorSettings sensorSettings;
+    lcdctl::OffscreenCanvas canvas({320, 480});
+    lcdctl::MonitorEngine engine(theme, canvas,
+                                 lcdctl::makeStaticSensors(sensorSettings));
+    engine.start();
+    const lcdctl::Image reference = canvas.framebuffer();
+    check(!reference.empty(), "engine produced a frame");
+
+    auto blank = [&canvas] {
+        std::memset(canvas.framebuffer().data(), 0, canvas.framebuffer().size());
+    };
+
+    // Stats-only redraw after the content is gone: background stays missing.
+    blank();
+    engine.redrawAll();
+    check(difference(reference, canvas.framebuffer()) != 0,
+          "redrawAll alone does not restore the background");
+
+    // Full repaint: identical to the first frame.
+    blank();
+    engine.repaintAll();
+    check(difference(reference, canvas.framebuffer()) == 0,
+          "repaintAll restores background + texts + stats");
+}
+
 // Rotation: the theme fixes the aspect, the user picks which side is up.
 void testOrientation() {
     using lcdctl::Orientation;
@@ -348,6 +378,7 @@ int main() {
     testTextGhosting(fonts);
     testYamlRoundTrip(root, fonts);
     testOrientation();
+    testFullRepaint(root, fonts);
     testAutostart();
     renderEveryTheme(root, fonts, "bundled");
     testAllThemes();
