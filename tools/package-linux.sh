@@ -57,6 +57,5 @@ cp -r docs "$stage/share/doc/docs"
 install -m 755 tools/install-linux.sh "$stage/install-linux.sh"
 
 tar -C "$out" -czf "$out/$name.tar.gz" "$name"
-echo "release: $out/$name.tar.gz"
-du -h "$out/$name.tar.gz"
-tar -tzf "$out/$name.tar.gz" | head -5
+echo "release: $out/$name.tar.gz ($(du -h "$out/$name.tar.gz" | cut -f1))"
+tar -tzf "$out/$name.tar.gz" | sed -n '1,5p' | sed 's/^/  /' 
