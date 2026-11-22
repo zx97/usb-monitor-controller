@@ -80,9 +80,17 @@ release with these assets:
 
 | Asset | Built by | Content |
 |---|---|---|
-| `usb-monitor-controller-<ver>-linux-x86_64.tar.gz` | `tools/package-linux.sh` | `bin/`, `res/`, docs, install script |
+| `usb-monitor-controller-<ver>-linux-x86_64.tar.gz` | `tools/package-linux.sh` | `bin/`, `res/`, docs, install script, `README-linux.txt` (runtime dependencies) |
+| `usb-monitor-controller-<ver>-src.tar.gz` | `git archive` | full source tree for `make install` on any distribution |
 | `usb-monitor-controller-windows-x64.zip` | `tools/build-windows.sh` | portable folder with every DLL |
 | `usb-monitor-controller-<ver>-windows-x64-setup.exe` | `tools/build-windows-installer.sh` | Inno Setup, per-user install |
+
+The Linux binaries are **dynamically linked** against the CI distribution
+(Ubuntu 24.04): they run on Debian 12+/Ubuntu 24.04+ once Qt 6 and the image
+libraries are installed (see `README-linux.txt` inside the tarball). The libjpeg
+SONAME differs across distributions (Ubuntu `libjpeg.so.8`, Fedora
+`libjpeg.so.62`), so on Fedora use the source tarball and `make install`. The
+Windows packages are self-contained (all DLLs bundled).
 
 **GitLab** (`.gitlab-ci.yml`) runs the tests and publishes the Linux tarball to
 the Generic Package Registry and as a release asset link; the Windows artefacts

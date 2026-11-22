@@ -9,7 +9,13 @@
 #
 # The tarball is the equivalent of the Windows zip: extract it anywhere and run
 # bin/lcd-monitor. It contains the four binaries, res/ (themes, fonts, icons),
-# the documentation and the licence.
+# the documentation and the licence, plus a README stating the runtime
+# dependencies (the binaries are dynamically linked against Qt 6 and the usual
+# image libraries, unlike the Windows package which bundles its DLLs).
+#
+# A source tarball is produced too, so a machine whose distribution does not
+# provide the same SONAMEs (Fedora's libjpeg.so.62 vs Ubuntu's libjpeg.so.8) can
+# build with `make install`.
 
 set -euo pipefail
 
@@ -56,6 +62,45 @@ install -m 644 README.md AUTHORS.md CHANGELOG.md LICENSE "$stage/share/doc/"
 cp -r docs "$stage/share/doc/docs"
 install -m 755 tools/install-linux.sh "$stage/install-linux.sh"
 
+cat > "$stage/share/doc/README-linux.txt" <<'EOF'
+USB-monitor-controller — Linux binary package
+=============================================
+
+The four binaries are dynamically linked against the system libraries of the
+machine that built this package (Ubuntu 24.04 / Debian 12 family). Install the
+runtime dependencies before running them:
+
+  Debian / Ubuntu
+    sudo apt install qt6-base-dev libpng16-16 libjpeg-turbo8 libfreetype6 \
+                     libusb-1.0-0 libssl3 libyaml-cpp0.8
+
+  Fedora
+    sudo dnf install qt6-qtbase libpng jpeg-turbo freetype libusb1 openssl-libs \
+                     yaml-cpp
+
+  Arch
+    sudo pacman -S qt6-base libpng libjpeg-turbo freetype2 libusb openssl yaml-cpp
+
+`bin/lcd-monitor --once` prints one JSON sample and exits: if it works, the
+dependencies are satisfied.
+
+The SONAME of libjpeg differs between distributions (Ubuntu: libjpeg.so.8,
+Fedora: libjpeg.so.62): a binary built on Ubuntu will not start on Fedora. Use
+the source tarball in that case:
+
+  tar -xzf usb-monitor-controller-<version>-src.tar.gz
+  cd usb-monitor-controller-<version>
+  make && sudo make install     # or ./tools/install-linux.sh for a per-user copy
+
+Documentation: share/doc/docs/ (THEMES.md, WINDOWS.md, BUILD.md, ...).
+EOF
+
 tar -C "$out" -czf "$out/$name.tar.gz" "$name"
-echo "release: $out/$name.tar.gz ($(du -h "$out/$name.tar.gz" | cut -f1))"
+echo "binary package: $out/$name.tar.gz ($(du -h "$out/$name.tar.gz" | cut -f1))"
+
+# Source tarball: `make install` on any distribution (same content as the git
+# tree, docs and themes included).
+srcname="usb-monitor-controller-$version-src"
+git -C "$repo" archive --format=tar.gz --prefix="$srcname/" -o "$out/$srcname.tar.gz" HEAD
+echo "source package: $out/$srcname.tar.gz ($(du -h "$out/$srcname.tar.gz" | cut -f1))"
 tar -tzf "$out/$name.tar.gz" | sed -n '1,5p' | sed 's/^/  /' 
